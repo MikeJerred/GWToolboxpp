@@ -22,3 +22,4 @@ ipch/
 *.pdb
 *.opendb
 GWToolboxpp.VC.db
+OSHGui/Include
