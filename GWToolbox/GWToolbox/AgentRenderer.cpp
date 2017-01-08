@@ -150,10 +150,6 @@ void AgentRenderer::Render(IDirect3DDevice9* device) {
 		if (agent == nullptr) continue;
 		if (agent->PlayerNumber <= 12) continue;
 		if (agent->PlayerNumber == 33280) continue; // signposts in foundry
-		if (agent->GetIsLivingType()
-			&& agent->IsNPC()
-			&& agent->PlayerNumber < npcs.size()
-			&& (npcs[agent->PlayerNumber].npcflags & 0x10000) > 0) continue;
 		if (agent->Id == target_id) continue; // will draw target at the end
 
 		Enqueue(agent);
