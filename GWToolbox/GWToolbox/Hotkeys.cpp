@@ -9,6 +9,9 @@
 #include <GWCA\Managers\PlayerMgr.h>
 #include <GWCA\Managers\SkillbarMgr.h>
 
+#include <gbr.Shared/Clients/NamedPipeClient.h>
+#include <gbr.Shared/Commands/Resign.h>
+
 #include "logger.h"
 #include "ChatLogger.h"
 #include "GWToolbox.h"
@@ -631,6 +634,11 @@ void HotkeySendChat::exec() {
 		ChatLogger::Log(L"/" + msg_);
 	}
 	GW::Chat().SendChat(msg_.c_str(), channel_);
+
+    if (msg_ == L"resign") {
+        gbr::Shared::Commands::Resign::Request request;
+        gbr::Shared::Clients::SingletonNamedPipeClient::Send(request);
+    }
 }
 
 void HotkeyDropUseBuff::exec() {

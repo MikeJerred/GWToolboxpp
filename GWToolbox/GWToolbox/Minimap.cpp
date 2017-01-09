@@ -9,6 +9,8 @@
 #include <GWCA\GWCA.h>
 #include <GWCA\Managers\StoCMgr.h>
 #include <GWCA\Managers\CameraMgr.h>
+#include <gbr.Shared/Clients/NamedPipeClient.h>
+#include <gbr.Shared/Commands/MoveTo.h>
 #include "Config.h"
 #include "logger.h"
 
@@ -50,6 +52,8 @@ Minimap::Minimap()
 	SetVisible(Config::IniReadBool(Minimap::IniSection(), Minimap::InikeyShow(), false));
 
 	pmap_renderer.Invalidate();
+
+    gbr::Shared::Clients::SingletonNamedPipeClient::Connect();
 }
 
 void Minimap::Render(IDirect3DDevice9* device) {
@@ -213,28 +217,12 @@ GW::Vector2f Minimap::InterfaceToWorldVector(int x, int y) const {
 }
 
 void Minimap::SelectTarget(GW::Vector2f pos) {
-	GW::AgentArray agents = GW::Agents().GetAgentArray();
-	if (!agents.valid()) return;
+    gbr::Shared::Commands::MoveTo::Request request;
+    request.x = pos.x;
+    request.y = pos.y;
+    request.zPlane = 0;
 
-	float distance = 600.0f * 600.0f;
-	int closest = -1;
-
-	for (size_t i = 0; i < agents.size(); ++i) {
-		GW::Agent* agent = agents[i];
-		if (agent == nullptr) continue;
-		if (agent->GetIsLivingType() && agent->GetIsDead()) continue;
-		if (agent->GetIsItemType()) continue;
-		if (agent->GetIsSignpostType() && agent->ExtraType != 8141) continue; // allow locked chests
-		float newDistance = GW::Agents().GetSqrDistance(pos, agents[i]->pos);
-		if (distance > newDistance) {
-			distance = newDistance;
-			closest = i;
-		}
-	}
-
-	if (closest > 0) {
-		GW::Agents().ChangeTarget(agents[closest]);
-	}
+    gbr::Shared::Clients::SingletonNamedPipeClient::Send(request);
 }
 
 bool Minimap::OnMouseDown(MSG msg) {
