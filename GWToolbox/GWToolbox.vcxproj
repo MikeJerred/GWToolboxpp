@@ -47,8 +47,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionDir)GWCA_DX;$(SolutionDir)GWCA;$(SolutionDir)OSHGui;$(SolutionDir)Dependencies\DirectX\Include\;$(ProjectDir)Dependencies;$(SolutionDir)..;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)Dependencies\DirectX\Lib\x86\;$(OutDir);$(SolutionDir)GWCA\;$(SolutionDir)..;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)GWCA_DX;$(SolutionDir)GWCA;$(SolutionDir)OSHGui;$(SolutionDir)Dependencies\DirectX\Include\;$(ProjectDir)Dependencies;$(SolutionDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)Dependencies\DirectX\Lib\x86\;$(OutDir);$(SolutionDir)GWCA\;$(SolutionDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
