@@ -10,6 +10,7 @@
 #include <GWCA\Managers\StoCMgr.h>
 #include <GWCA\Managers\CameraMgr.h>
 #include <gbr.Shared/Clients/NamedPipeClient.h>
+#include <gbr.Shared/Commands/AggressiveMoveTo.h>
 #include <gbr.Shared/Commands/MoveTo.h>
 #include "Config.h"
 #include "logger.h"
@@ -216,8 +217,17 @@ GW::Vector2f Minimap::InterfaceToWorldVector(int x, int y) const {
 	return GW::Vector2f(x2, y2);
 }
 
-void Minimap::SelectTarget(GW::Vector2f pos) {
+void Minimap::SelectMovePos(GW::Vector2f pos) {
     gbr::Shared::Commands::MoveTo::Request request;
+    request.x = pos.x;
+    request.y = pos.y;
+    request.zPlane = 0;
+
+    gbr::Shared::Clients::SingletonNamedPipeClient::Send(request);
+}
+
+void Minimap::SelectTarget(GW::Vector2f pos) {
+    gbr::Shared::Commands::AggressiveMoveTo::Request request;
     request.x = pos.x;
     request.y = pos.y;
     request.zPlane = 0;
@@ -234,15 +244,17 @@ bool Minimap::OnMouseDown(MSG msg) {
 
 	mousedown_ = true;
 
-	if (msg.wParam & MK_CONTROL) {
-		SelectTarget(InterfaceToWorldPoint(x, y));
+	if (msg.wParam & MK_SHIFT) {
+        SelectMovePos(InterfaceToWorldPoint(x, y));
 		return true;
 	}
+    if (msg.wParam & MK_CONTROL) {
+        SelectTarget(InterfaceToWorldPoint(x, y));
+        return true;
+    }
 
 	drag_start_x_ = x;
 	drag_start_y_ = y;
-
-	if (msg.wParam & MK_SHIFT) return true;
 
 	if (!freeze_) return true;
 
@@ -259,10 +271,14 @@ bool Minimap::OnMouseDblClick(MSG msg) {
 	int y = GET_Y_LPARAM(msg.lParam);
 	if (!IsInside(x, y)) return false;
 
-	if (msg.wParam & MK_CONTROL) {
-		SelectTarget(InterfaceToWorldPoint(x, y));
+	if (msg.wParam & MK_SHIFT) {
+        SelectMovePos(InterfaceToWorldPoint(x, y));
 		return true;
 	}
+    if (msg.wParam & MK_CONTROL) {
+        SelectTarget(InterfaceToWorldPoint(x, y));
+        return true;
+    }
 
 	return true;
 }

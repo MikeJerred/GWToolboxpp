@@ -41,6 +41,7 @@ private:
 
 	GW::Vector2f InterfaceToWorldPoint(int x, int y) const;
 	GW::Vector2f InterfaceToWorldVector(int x, int y) const;
+    void SelectMovePos(GW::Vector2f pos);
 	void SelectTarget(GW::Vector2f pos);
 
 	bool freeze_;
