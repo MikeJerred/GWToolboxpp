@@ -2,6 +2,7 @@
 
 #include <GWCA\GWCA.h>
 #include <GWCA\Managers\AgentMgr.h>
+#include <GWCA\Managers\ItemMgr.h>
 
 #include "Config.h"
 #include "MinimapUtils.h"
@@ -16,6 +17,7 @@ AgentRenderer::AgentRenderer() : vertices(nullptr) {
 	color_player_dead = MinimapUtils::IniReadColor2(L"color_player_dead", L"0x64FF8000");
 	color_signpost = MinimapUtils::IniReadColor2(L"color_signpost", L"0xFF0000C8");
 	color_item = MinimapUtils::IniReadColor2(L"color_item", L"0xFF0000F0");
+    color_gemstone = MinimapUtils::IniReadColor2(L"color_gemstone", L"0xFFE6AA3C");
 	color_hostile = MinimapUtils::IniReadColor2(L"color_hostile", L"0xFFF00000");
 	color_hostile_damaged = MinimapUtils::IniReadColor2(L"color_hostile_damaged", L"0xFF800000");
 	color_hostile_dead = MinimapUtils::IniReadColor2(L"color_hostile_dead", L"0xFF320000");
@@ -203,7 +205,22 @@ MinimapUtils::Color AgentRenderer::GetColor(GW::Agent* agent) const {
 	}
 
 	if (agent->GetIsSignpostType()) return color_signpost;
-	if (agent->GetIsItemType()) return color_item;
+
+    if (agent->GetIsItemType()) {
+        auto item = GW::Items().GetItemArray()[agent->itemid];
+
+        if (item) {
+            switch (item->ModelId) {
+            case GW::Constants::ItemID::StygianGem:
+            case GW::Constants::ItemID::TormentGem:
+            case GW::Constants::ItemID::TitanGem:
+            case GW::Constants::ItemID::MargoniteGem:
+                return color_gemstone;
+            }
+        }
+
+        return color_item;
+    }
 
 	// don't draw dead spirits
 	auto npcs = GW::Agents().GetNPCArray();

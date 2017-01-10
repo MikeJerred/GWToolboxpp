@@ -44,6 +44,7 @@ private:
 	MinimapUtils::Color color_player_dead;
 	MinimapUtils::Color color_signpost;
 	MinimapUtils::Color color_item;
+    MinimapUtils::Color color_gemstone;
 	MinimapUtils::Color color_hostile;
 	MinimapUtils::Color color_hostile_damaged;
 	MinimapUtils::Color color_hostile_dead;
