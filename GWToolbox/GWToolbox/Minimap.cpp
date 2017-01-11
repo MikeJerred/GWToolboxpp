@@ -305,6 +305,11 @@ bool Minimap::OnMouseMove(MSG msg) {
 	int y = GET_Y_LPARAM(msg.lParam);
 	if (!IsInside(x, y)) return false;
 
+    if (msg.wParam & MK_SHIFT) {
+        SelectMovePos(InterfaceToWorldPoint(x, y));
+        return true;
+    }
+
 	if (msg.wParam & MK_CONTROL) {
 		SelectTarget(InterfaceToWorldPoint(x, y));
 		return true;
