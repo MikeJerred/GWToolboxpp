@@ -305,7 +305,7 @@ bool Minimap::OnMouseMove(MSG msg) {
 	int y = GET_Y_LPARAM(msg.lParam);
 	if (!IsInside(x, y)) return false;
 
-    if (msg.wParam & MK_SHIFT) {
+    /*if (msg.wParam & MK_SHIFT) {
         SelectMovePos(InterfaceToWorldPoint(x, y));
         return true;
     }
@@ -324,7 +324,7 @@ bool Minimap::OnMouseMove(MSG msg) {
 		drag_start_y_ = y;
 		last_moved_ = TBTimer::init();
 		return true;
-	}
+	}*/
 
 	if (!freeze_) {
 		int diff_x = x - drag_start_x_;
