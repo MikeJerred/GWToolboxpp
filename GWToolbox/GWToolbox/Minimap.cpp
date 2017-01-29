@@ -11,6 +11,7 @@
 #include <GWCA\Managers\CameraMgr.h>
 #include <gbr.Shared/Clients/NamedPipeClient.h>
 #include <gbr.Shared/Commands/AggressiveMoveTo.h>
+#include <gbr.Shared/Commands/Disperse.h>
 #include <gbr.Shared/Commands/MoveTo.h>
 #include "Config.h"
 #include "logger.h"
@@ -217,6 +218,15 @@ GW::Vector2f Minimap::InterfaceToWorldVector(int x, int y) const {
 	return GW::Vector2f(x2, y2);
 }
 
+void Minimap::SelectDispersePos(GW::Vector2f pos) {
+    gbr::Shared::Commands::Disperse::Request request;
+    request.x = pos.x;
+    request.y = pos.y;
+    request.zPlane = 0;
+
+    gbr::Shared::Clients::SingletonNamedPipeClient::Send(request);
+}
+
 void Minimap::SelectMovePos(GW::Vector2f pos) {
     gbr::Shared::Commands::MoveTo::Request request;
     request.x = pos.x;
@@ -252,6 +262,10 @@ bool Minimap::OnMouseDown(MSG msg) {
         SelectTarget(InterfaceToWorldPoint(x, y));
         return true;
     }
+    if (msg.wParam & MK_ALT) {
+        SelectDispersePos(InterfaceToWorldPoint(x, y));
+        return true;
+    }
 
 	drag_start_x_ = x;
 	drag_start_y_ = y;
@@ -279,6 +293,11 @@ bool Minimap::OnMouseDblClick(MSG msg) {
         SelectTarget(InterfaceToWorldPoint(x, y));
         return true;
     }
+    if (msg.wParam & MK_ALT) {
+        SelectDispersePos(InterfaceToWorldPoint(x, y));
+        return true;
+    }
+
 
 	return true;
 }
