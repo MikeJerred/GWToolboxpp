@@ -262,7 +262,7 @@ bool Minimap::OnMouseDown(MSG msg) {
         SelectTarget(InterfaceToWorldPoint(x, y));
         return true;
     }
-    if (msg.wParam & MK_ALT) {
+    if (GetKeyState(VK_MENU) < 0) {
         SelectDispersePos(InterfaceToWorldPoint(x, y));
         return true;
     }
@@ -293,7 +293,7 @@ bool Minimap::OnMouseDblClick(MSG msg) {
         SelectTarget(InterfaceToWorldPoint(x, y));
         return true;
     }
-    if (msg.wParam & MK_ALT) {
+    if (GetKeyState(VK_MENU) < 0) {
         SelectDispersePos(InterfaceToWorldPoint(x, y));
         return true;
     }
