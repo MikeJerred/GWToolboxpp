@@ -37,7 +37,9 @@ public:
 
     static inline bool move_all = false;
     static inline bool clamp_windows_to_screen = false;
-    static inline bool send_anonymous_gameplay_info = true;
+    static inline bool send_anonymous_gameplay_info = false;
+    static inline bool disable_in_guild_hall = true;
+
 private:
     // === location stuff ===
     clock_t location_timer = 0;

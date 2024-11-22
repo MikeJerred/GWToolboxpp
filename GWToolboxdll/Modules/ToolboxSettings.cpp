@@ -349,6 +349,7 @@ void ToolboxSettings::DrawFreezeSetting()
     ImGui::ShowHelp("Will allow movement and resize of all widgets and windows");
     ImGui::NextSpacedElement();
     ImGui::Checkbox("Clamp growing windows to screen bounds", &clamp_windows_to_screen);
+    ImGui::Checkbox("Disable toolbox in guild hall", &disable_in_guild_hall);
 }
 
 void ToolboxSettings::LoadSettings(ToolboxIni* ini)
@@ -359,6 +360,7 @@ void ToolboxSettings::LoadSettings(ToolboxIni* ini)
     move_all = false;
     LOAD_BOOL(clamp_windows_to_screen);
     LOAD_BOOL(send_anonymous_gameplay_info);
+    LOAD_BOOL(disable_in_guild_hall);
 
     for (auto& m : optional_modules) {
         m.enabled = ini->GetBoolValue(modules_ini_section, m.name, m.enabled);
@@ -380,6 +382,7 @@ void ToolboxSettings::SaveSettings(ToolboxIni* ini)
 
     SAVE_BOOL(clamp_windows_to_screen);
     SAVE_BOOL(send_anonymous_gameplay_info);
+    SAVE_BOOL(disable_in_guild_hall);
 
     for (const auto& m : optional_modules) {
         ini->SetBoolValue(modules_ini_section, m.name, m.enabled);
