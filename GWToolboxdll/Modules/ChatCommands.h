@@ -143,12 +143,10 @@ private:
         }
     } npc_to_find;
 
-    struct SkillToUse {
-        uint32_t slot = 0; // 1-8 range
-        float skill_usage_delay = 0.f;
-        clock_t skill_timer = clock();
-        void Update();
-    } skill_to_use;
+    void AddSkillToUse(uint32_t skill); // 1-8 range
+    std::list<uint32_t> skills_to_use;  // 0-7 range
+    float skill_usage_delay = 1.0f;
+    clock_t skill_timer = clock();
 
     struct QuestPing {
         GW::Constants::QuestID quest_id = static_cast<GW::Constants::QuestID>(0);
