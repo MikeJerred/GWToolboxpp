@@ -250,58 +250,14 @@ void Updater::DrawSettingsInternal()
     ImGui::RadioButton("Check and automatically update", (int*)&mode, static_cast<int>(Mode::CheckAndAutoUpdate));
 }
 
-void Updater::CheckForUpdate(const bool forced)
+void Updater::CheckForUpdate(const bool)
 {
     if (!GetCurrentVersionInfo(&current_release)) {
         Log::Error("Failed to get current toolbox version info");
     }
     step = Checking;
     last_check = clock();
-    if (!forced && mode == Mode::DontCheckForUpdates) {
-        step = Done;
-        return;
-    }
-
-    Resources::EnqueueWorkerTask([forced] {
-        if (!forced && mode == Mode::DontCheckForUpdates) {
-            return; // Do not check for updates
-        }
-
-        // Here we are in the worker thread and can do blocking operations
-        // Reminder: do not send stuff to gw chat from this thread!
-        if (!GetLatestRelease(&latest_release)) {
-            // Error getting server version. Server down? We can do nothing.
-            Log::Flash("Error checking for updates");
-            step = Done;
-            return;
-        }
-
-        if (latest_release.version == current_release.version) {
-            // Version and size match
-            step = Done;
-            if (forced) {
-                Log::Flash("GWToolbox++ is up-to-date");
-            }
-            return;
-        }
-
-        // we have a new version!
-        Mode iMode = forced ? Mode::CheckAndAsk : mode;
-        if constexpr (!std::string(GWTOOLBOXDLL_VERSION_BETA).empty()) {
-            iMode = Mode::CheckAndAsk;
-        }
-        switch (iMode) {
-            case Mode::CheckAndAsk:
-                step = CheckAndAsk;
-                break;
-            case Mode::CheckAndAutoUpdate:
-                step = CheckAndAutoUpdate;
-                break;
-            case Mode::CheckAndWarn:
-                step = CheckAndWarn;
-                break;
-        }
-    });
+    step = Done;
 }
 
 void Updater::Draw(IDirect3DDevice9*)
