@@ -192,7 +192,7 @@ void PluginModule::DrawSettingsInternal()
 
 bool PluginModule::CanTerminate()
 {
-    return plugins_loaded.empty();
+    return true;
 }
 
 bool PluginModule::WndProc(const UINT msg, const WPARAM wParam, const LPARAM lParam)
@@ -310,18 +310,22 @@ void PluginModule::Update(const float delta)
 void PluginModule::SignalTerminate()
 {
     ToolboxUIElement::SignalTerminate();
-    for (const auto plugin : plugins_loaded) {
-        UnloadPlugin(plugin);
+
+    for (const auto plugin : plugins_loaded | std::views::reverse) 
+    {
+        if (plugin && plugin->instance && !plugin->terminating) 
+            plugin->instance->SignalTerminate();
     }
 }
 
 void PluginModule::Terminate()
 {
-    ASSERT(plugins_loaded.empty());
+    // Some hook in GWCA is not being released properly, so plugins cannot be unloaded properly
+    /* ASSERT(plugins_loaded.empty());
     for (const auto p : plugins_available) {
         if (p->dll) {
             FreeLibrary(p->dll);
         }
         delete p;
-    }
+    }*/
 }
