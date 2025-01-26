@@ -68,6 +68,7 @@ public:
 
     [[nodiscard]] float GetMapRotation() const;
     [[nodiscard]] static DirectX::XMFLOAT2 GetGwinchScale();
+    std::vector<GW::Vec2f> ShadowstepPathingLocations() const;
     [[nodiscard]] GW::Vec2f ShadowstepLocation() const;
 
     // 0 is 'all' flag, 1 to 7 is each hero

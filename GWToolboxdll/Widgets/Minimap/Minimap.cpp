@@ -95,6 +95,8 @@ namespace {
 
 
     GW::Vec2f shadowstep_location = {0.f, 0.f};
+    std::vector<GW::Vec2f> shadowstep_pathing;
+
     RECT clipping = {};
 
     Vec2i drag_start;
@@ -766,6 +768,11 @@ GW::Vec2f Minimap::ShadowstepLocation() const
     return shadowstep_location;
 }
 
+std::vector<GW::Vec2f> Minimap::ShadowstepPathingLocations() const
+{
+    return shadowstep_pathing;
+}
+
 void CHAT_CMD_FUNC(Minimap::OnFlagHeroCmd)
 {
     if (GW::Map::GetInstanceType() != GW::Constants::InstanceType::Explorable) {
@@ -988,6 +995,9 @@ void Minimap::DrawSettingsInternal()
     ImGui::NextSpacedElement();
     ImGui::Checkbox("Reduce agent ping spam", &pingslines_renderer.reduce_ping_spam);
     ImGui::ShowHelp("Additional pings on the same agents will increase the duration of the existing ping, rather than create a new one.");
+    ImGui::NextSpacedElement();
+    ImGui::Checkbox("Show pathing steps", &pingslines_renderer.show_pathing_steps);
+    ImGui::ShowHelp("Show steps the GW pathing takes towards your SoH spot. Useful for debugging shadow step behaviour.");
     ImGui::NextSpacedElement();
     ImGui::Checkbox("Map Rotation", &rotate_minimap);
     ImGui::ShowHelp("Map rotation on (e.g. Compass), or off (e.g. Mission Map).");
