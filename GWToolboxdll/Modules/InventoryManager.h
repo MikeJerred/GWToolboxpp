@@ -12,45 +12,24 @@
 
 namespace GW {
     namespace Constants {
-        enum class Rarity : uint8_t {
-            White,
-            Blue,
-            Purple,
-            Gold,
-            Green
-        };
+        enum class Rarity : uint8_t { White, Blue, Purple, Gold, Green };
         enum class Bag : uint8_t;
-    }
+    } // namespace Constants
     namespace UI {
         enum class UIMessage : uint32_t;
     }
-}
+} // namespace GW
 
 class InventoryOverlayWidget;
 
 class InventoryManager : public ToolboxUIElement {
-    InventoryManager()
-    {
-        is_movable = is_resizable = has_closebutton = can_show_in_main_window = false;
-    }
+    InventoryManager() { is_movable = is_resizable = has_closebutton = can_show_in_main_window = false; }
     ~InventoryManager() override = default;
+
 public:
+    enum class SalvageAllType : uint8_t { None, White, BlueAndLower, PurpleAndLower, GoldAndLower };
 
-    enum class SalvageAllType : uint8_t {
-        None,
-        White,
-        BlueAndLower,
-        PurpleAndLower,
-        GoldAndLower
-    };
-
-    enum class IdentifyAllType : uint8_t {
-        None,
-        All,
-        Blue,
-        Purple,
-        Gold
-    };
+    enum class IdentifyAllType : uint8_t { None, All, Blue, Purple, Gold };
 
     static InventoryManager& Instance()
     {
@@ -95,10 +74,9 @@ public:
     SalvageAllType salvage_all_type = SalvageAllType::None;
 
 protected:
-    void ShowVisibleRadio() override { }
+    void ShowVisibleRadio() override {}
 
 private:
-
     bool show_item_context_menu = false;
     bool is_identifying = false;
     bool is_identifying_all = false;
@@ -137,9 +115,6 @@ private:
 
 
     void FetchPotentialItems();
-    void AttachSalvageListeners();
-    void DetachSalvageListeners();
-    static void ClearSalvageSession(GW::HookStatus* status = nullptr, void* packet = nullptr);
     void CancelSalvage();
     void CancelIdentify();
     void CancelAll();
@@ -172,64 +147,28 @@ public:
         bool IsOfferedInTrade() const;
         bool CanOfferToTrade() const;
 
-        [[nodiscard]] bool IsSparkly() const
-        {
-            return (interaction & 0x2000) == 0;
-        }
+        [[nodiscard]] bool IsSparkly() const { return (interaction & 0x2000) == 0; }
 
-        [[nodiscard]] bool GetIsIdentified() const
-        {
-            return (interaction & 1) != 0;
-        }
-        [[nodiscard]] bool IsPrefixUpgradable() const
-        {
-            return ((interaction >> 14) & 1) == 0;
-        }
+        [[nodiscard]] bool GetIsIdentified() const { return (interaction & 1) != 0; }
+        [[nodiscard]] bool IsPrefixUpgradable() const { return ((interaction >> 14) & 1) == 0; }
 
-        [[nodiscard]] bool IsSuffixUpgradable() const
-        {
-            return ((interaction >> 15) & 1) == 0;
-        }
+        [[nodiscard]] bool IsSuffixUpgradable() const { return ((interaction >> 15) & 1) == 0; }
 
-        [[nodiscard]] bool IsStackable() const
-        {
-            return (interaction & 0x80000) != 0;
-        }
+        [[nodiscard]] bool IsStackable() const { return (interaction & 0x80000) != 0; }
 
-        [[nodiscard]] bool IsUsable() const
-        {
-            return (interaction & 0x1000000) != 0;
-        }
+        [[nodiscard]] bool IsUsable() const { return (interaction & 0x1000000) != 0; }
 
-        [[nodiscard]] bool IsTradable() const
-        {
-            return (interaction & 0x100) == 0;
-        }
+        [[nodiscard]] bool IsTradable() const { return (interaction & 0x100) == 0; }
 
-        [[nodiscard]] bool IsInscription() const
-        {
-            return (interaction & 0x25000000) == 0x25000000;
-        }
+        [[nodiscard]] bool IsInscription() const { return (interaction & 0x25000000) == 0x25000000; }
 
-        [[nodiscard]] bool IsBlue() const
-        {
-            return single_item_name && single_item_name[0] == 0xA3F;
-        }
+        [[nodiscard]] bool IsBlue() const { return single_item_name && single_item_name[0] == 0xA3F; }
 
-        [[nodiscard]] bool IsPurple() const
-        {
-            return (interaction & 0x400000) != 0;
-        }
+        [[nodiscard]] bool IsPurple() const { return (interaction & 0x400000) != 0; }
 
-        [[nodiscard]] bool IsGreen() const
-        {
-            return (interaction & 0x10) != 0;
-        }
+        [[nodiscard]] bool IsGreen() const { return (interaction & 0x10) != 0; }
 
-        [[nodiscard]] bool IsGold() const
-        {
-            return (interaction & 0x20000) != 0;
-        }
+        [[nodiscard]] bool IsGold() const { return (interaction & 0x20000) != 0; }
     };
 
     Item* GetNextUnsalvagedItem(const Item* salvage_kit = nullptr, const Item* start_after_item = nullptr);
@@ -267,14 +206,7 @@ private:
     static_assert(sizeof(CtoS_QuoteItem) == 0x9C);
 
     struct PendingTransaction {
-        enum State : uint8_t {
-            None,
-            Prompt,
-            Pending,
-            Quoting,
-            Quoted,
-            Transacting
-        } state = None;
+        enum State : uint8_t { None, Prompt, Pending, Quoting, Quoted, Transacting } state = None;
 
         uint32_t type = 0;
         uint32_t price = 0;
