@@ -685,6 +685,10 @@ void Minimap::Initialize()
     GW::StoC::RegisterPacketCallback<GW::Packet::StoC::PlayEffect>(&Generic_HookEntry, OnPlayEffect);
     GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericValue>(&Generic_HookEntry, OnGenericValue);
     GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericValueTarget>(&Generic_HookEntry, OnGenericValueTarget);
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::InstanceLoadFile>(&Generic_HookEntry, [this](GW::HookStatus*, const GW::Packet::StoC::InstanceLoadFile*) 
+    {
+        GameWorldRenderer::TriggerSyncAllMarkers();
+    });
     constexpr std::array hook_messages = {
         GW::UI::UIMessage::kMapChange,
         GW::UI::UIMessage::kMapLoaded,

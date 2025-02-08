@@ -98,17 +98,14 @@ namespace {
         }
 
         const auto players = GW::PartyMgr::GetPartyPlayers();
-        if (!(players && players->size() > 1))
-            return;
+        if (!(players && players->size() > 1)) return;
 
         uint32_t not_resigned = 0;
-        for (auto& p : *players) {
-            if (!p.connected())
-                continue;
-            if (GetResignStatus(p.login_number) != Status::Resigned)
-                not_resigned++;
+        for (const auto& player : *players) {
+            if (!player.connected()) continue;
+            if (GetResignStatus(player.login_number) != Status::Resigned) not_resigned++;
         }
-        if (not_resigned == 0) {
+        if (not_resigned <= 1) { // one of the players who hasn't resigned is us
             Log::Warning("You're the only player left to resign. Type /resign in chat to resign.");
         }
     }
