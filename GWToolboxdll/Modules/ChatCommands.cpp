@@ -1244,7 +1244,8 @@ void ChatCommands::Initialize()
         {"dorian", {8299, def_scale, 86510, 0, 98820}},
         {"kanaxai", {317, def_scale, 184176, 185319, 98820}},
         {"skeletonic", {359, def_scale, 52356, 0, 98820}},
-        {"moa", {504, def_scale, 16689, 0, 98820}}
+        {"moa", {504, def_scale, 16689, 0, 98820}}, 
+        {"halloween", {12, def_scale, 0x3d67, 0x40d97, 98820}}
     };
 
     //TODO: Move all of these callbacks into pvt namespace
