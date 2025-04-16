@@ -234,7 +234,7 @@ void PingsLinesRenderer::Initialize(IDirect3DDevice9* device)
 
     const HRESULT hr = device->CreateVertexBuffer(sizeof(D3DVertex) * vertices_max, 0,
                                                   D3DFVF_CUSTOMVERTEX, D3DPOOL_MANAGED, &buffer, nullptr);
-    FindPath_Func = (FindPath_pt) GW::Scanner::Find("\x83\xec\x20\x53\x56\x57\xe8\xa2\x75\xdd", "xxxxxxxxxx", -0x3);
+    FindPath_Func = (FindPath_pt)GW::Scanner::Find("\x8b\x5d\x0c\x8b\x7d\x08\x8b\x70\x14\xd9", "xxxxxxxxxx", -0xE);
     
     if (FAILED(hr)) {
         printf("Error setting up PingsLinesRenderer vertex buffer: HRESULT: 0x%lX\n", hr);
