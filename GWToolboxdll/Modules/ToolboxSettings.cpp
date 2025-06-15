@@ -77,6 +77,7 @@
 #include <Widgets/VanquishWidget.h>
 #include <Widgets/AlcoholWidget.h>
 #include <Widgets/SkillbarWidget.h>
+#include <Widgets/ExtraWeaponsets.h>
 #include <Widgets/SkillMonitorWidget.h>
 #include <Widgets/WorldMapWidget.h>
 #include <Widgets/EffectsMonitorWidget.h>
@@ -162,6 +163,7 @@ namespace {
         PartyDamage::Instance(),
         BondsWidget::Instance(),
         ClockWidget::Instance(),
+        ExtraWeaponsetsWidget::Instance(),
         VanquishWidget::Instance(),
         AlcoholWidget::Instance(),
         WorldMapWidget::Instance(),
