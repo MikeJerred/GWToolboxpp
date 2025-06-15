@@ -16,6 +16,8 @@
 #include <Modules/GwDatTextureModule.h>
 #include <Utils/TextUtils.h>
 
+#include <Keys.h>
+
 namespace 
 {
     std::unordered_map<std::wstring, std::wstring> decodedNames;
@@ -168,6 +170,73 @@ namespace
             ImGui::EndPopup();
         }
     }
+
+    std::string makeHotkeyDescription(Hotkey hotkey)
+    {
+        char newDescription[256];
+        ModKeyName(newDescription, _countof(newDescription), hotkey.modifier, hotkey.keyData);
+        return std::string{newDescription};
+    }
+
+    bool drawHotkeySelector(Hotkey& hotkey, std::string& description)
+    {
+        bool keyChanged = false;
+
+        ImGui::PushItemWidth(100);
+        if (ImGui::Button(description.c_str())) 
+        {
+            ImGui::OpenPopup("Select Hotkey");
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click to change hotkey");
+        if (ImGui::BeginPopup("Select Hotkey")) {
+            static long newkey = 0;
+            char newkey_buf[256]{};
+            long newmod = 0;
+
+            ImGui::Text("Press key");
+            if (ImGui::IsKeyDown(ImGuiMod_Ctrl)) newmod |= ModKey_Control;
+            if (ImGui::IsKeyDown(ImGuiMod_Shift)) newmod |= ModKey_Shift;
+            if (ImGui::IsKeyDown(ImGuiMod_Alt)) newmod |= ModKey_Alt;
+
+            if (newkey == 0) { // we are looking for the key
+                for (WORD i = 0; i < 512; i++) {
+                    switch (i) {
+                        case VK_CONTROL:
+                        case VK_LCONTROL:
+                        case VK_RCONTROL:
+                        case VK_SHIFT:
+                        case VK_LSHIFT:
+                        case VK_RSHIFT:
+                        case VK_MENU:
+                        case VK_LMENU:
+                        case VK_RMENU:
+                        case VK_LBUTTON:
+                        case VK_RBUTTON:
+                            continue;
+                        default: {
+                            if (::GetKeyState(i) & 0x8000) newkey = i;
+                        }
+                    }
+                }
+            }
+            else if (!(::GetKeyState(newkey) & 0x8000)) { // We have a key, check if it was released
+                keyChanged = true;
+                hotkey.keyData = newkey;
+                hotkey.modifier = newmod;
+                description = makeHotkeyDescription(hotkey);
+                newkey = 0;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ModKeyName(newkey_buf, _countof(newkey_buf), newmod, newkey);
+            ImGui::Text("%s", newkey_buf);
+
+            ImGui::EndPopup();
+        }
+        ImGui::PopItemWidth();
+
+        return keyChanged;
+    }
 } // namespace
 
 void ExtraWeaponsetsWidget::Initialize()
@@ -194,21 +263,30 @@ void ExtraWeaponsetsWidget::DrawSettingsInternal()
     ImGui::SliderInt("Size", &size, 1, 400);
     ImGui::SliderInt("Columns", &columns, 1, 16);
     ImGui::Text("Weapon sets:");
-    for (auto& [mainhand, offhand] : weaponSets) 
+
+
+    for (auto& weaponSet : weaponSets) 
     {
+        ImGui::PushID(&weaponSet);
         ImGui::Bullet();
+        
         ImGui::PushID(0);
         ImGui::Text("Mainhand:");
         ImGui::SameLine();
-        drawItemSelector(mainhand);
+        drawItemSelector(weaponSet.mainHand);
         ImGui::PopID();
+
         ImGui::PushID(1);
         ImGui::SameLine();
         ImGui::Text("Offhand:");
         ImGui::SameLine();
-        drawItemSelector(offhand);
+        drawItemSelector(weaponSet.offHand);
         ImGui::PopID();
-        ImGui::NewLine();
+
+        std::string hotkeyText = "Select hotkey";
+        drawHotkeySelector(weaponSet.hotkey, hotkeyText);
+
+        ImGui::PopID();
     }
 
     if (ImGui::Button("+")) 
@@ -228,16 +306,67 @@ bool ExtraWeaponsetsWidget::OnMouseDown(const UINT, const WPARAM, const LPARAM l
 
 bool ExtraWeaponsetsWidget::WndProc(const UINT message, const WPARAM wParam, const LPARAM lParam)
 {
-    const auto isActive = Instance().visible && weaponSets.size() > 0 && GW::Map::GetIsMapLoaded() && !GW::UI::GetIsWorldMapShowing() && GW::Map::GetInstanceType() != GW::Constants::InstanceType::Loading && GW::Agents::GetObservingId() != 0;
+    const auto isActive = Instance().visible && !GW::Chat::GetIsTyping() && weaponSets.size() > 0 && GW::Map::GetIsMapLoaded() && !GW::UI::GetIsWorldMapShowing() &&
+                          GW::Map::GetInstanceType() != GW::Constants::InstanceType::Loading && GW::Agents::GetObservingId() != 0;
     if (!isActive) return false;
-    bool triggered = false;
-    if (message == WM_LBUTTONDOWN) 
-    {
-        triggered |= OnMouseDown(message, wParam, lParam);
+    
+    Hotkey pressedKey{};
+    
+    switch (message) {
+        case WM_LBUTTONDOWN:
+            return OnMouseDown(message, wParam, lParam);
+        case WM_KEYDOWN:
+            if (const auto isRepeated = (int)lParam & (1 << 30)) break;
+            [[fallthrough]];
+        case WM_SYSKEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            pressedKey.keyData = static_cast<int>(wParam);
+            break;
+        case WM_XBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_XBUTTONDBLCLK:
+            if (LOWORD(wParam) & MK_MBUTTON) {
+                pressedKey.keyData = VK_MBUTTON;
+            }
+            if (LOWORD(wParam) & MK_XBUTTON1) {
+                pressedKey.keyData = VK_XBUTTON1;
+            }
+            if (LOWORD(wParam) & MK_XBUTTON2) {
+                pressedKey.keyData = VK_XBUTTON2;
+            }
+            break;
+        case WM_MBUTTONDBLCLK:
+            pressedKey.keyData = VK_MBUTTON;
+            break;
+        default:
+            break;
     }
-    // TODO: Check if the key matches a hotkey
 
-    return triggered;
+    if (!pressedKey.keyData) return false;
+    if (GetKeyState(VK_CONTROL) < 0) pressedKey.modifier |= ModKey_Control;
+    if (GetKeyState(VK_SHIFT) < 0) pressedKey.modifier |= ModKey_Shift;
+    if (GetKeyState(VK_MENU) < 0) pressedKey.modifier |= ModKey_Alt;
+    
+    auto weaponSet = std::ranges::find_if(weaponSets, [&](const auto& set){return set.hotkey == pressedKey;});
+    if (weaponSet == weaponSets.end()) return false;
+
+    for (auto& set : weaponSets) set.isActive = false;
+    weaponSet->isActive = true;
+
+    const auto& items = GW::Items::GetItemArray();
+    if (!items) return false;
+
+    const auto mainHand = std::ranges::find_if(*items, [&](const auto* item) { return weaponSet->mainHand.modelID && item && item->model_id == weaponSet->mainHand.modelID;});
+    const auto offHand = std::ranges::find_if(*items, [&](const auto* item) { return weaponSet->offHand.modelID && item && item->model_id == weaponSet->offHand.modelID;});
+
+    GW::GameThread::Enqueue([mainHand = (mainHand != items->end() ? *mainHand : nullptr), offHand = (offHand != items->end() ? *offHand : nullptr)]
+    {
+        if (mainHand) GW::Items::EquipItem(mainHand);
+        if (offHand) GW::Items::EquipItem(offHand);
+    });
+
+    return true;
 }
 
 void ExtraWeaponsetsWidget::Draw(IDirect3DDevice9*)
@@ -265,11 +394,11 @@ void ExtraWeaponsetsWidget::Draw(IDirect3DDevice9*)
         const auto initialPosition = ImGui::GetCursorScreenPos();
         auto column = 0u;
         auto row = 0u;
-        for (const auto& [mainHandInfo, offHandInfo] : weaponSets) 
+        for (const auto& weaponSet : weaponSets) 
         {
             const auto position = ImVec2{initialPosition.x + size * column, initialPosition.y + size * row};
-            const auto mainHand = std::ranges::find_if(*items, [&](const auto* i) { return mainHandInfo.modelID && i && i->model_id == mainHandInfo.modelID;});
-            const auto offHand = std::ranges::find_if(*items, [&](const auto* i) { return offHandInfo.modelID && i && i->model_id == offHandInfo.modelID;});
+            const auto mainHand = std::ranges::find_if(*items, [&](const auto* item) { return weaponSet.mainHand.modelID && item && item->model_id == weaponSet.mainHand.modelID;});
+            const auto offHand = std::ranges::find_if(*items, [&](const auto* item) { return weaponSet.offHand.modelID && item && item->model_id == weaponSet.offHand.modelID;});
             
             ImGui::PushID(column + row * columnCount);
             ImGui::GetWindowDrawList()->AddImage(*backGround, position, {position.x + size, position.y + size}, {0, 0}, {.5, 1});
