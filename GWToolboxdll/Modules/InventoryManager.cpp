@@ -891,7 +891,7 @@ void InventoryManager::Initialize()
         GW::Hook::EnableHooks(AddItemRowToWindow_Func);
     }
 
-    uintptr_t address = GW::Scanner::Find("\x6a\x6a\x6a\x30\xff\x75\x08", "xxxxxxx", -0x4);
+    uintptr_t address = GW::Scanner::Find("\x6a\x6c\x6a\x30\xff\x75\x08", "xxxxxxx", -0x4);
     if (address) {
         UICallback_ChooseQuantityPopup_Func = *(GW::UI::UIInteractionCallback*)address;
         GW::Hook::CreateHook((void**)&UICallback_ChooseQuantityPopup_Func, OnChooseQuantityPopupUIMessage, reinterpret_cast<void**>(&UICallback_ChooseQuantityPopup_Ret));
