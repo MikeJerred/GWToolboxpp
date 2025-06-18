@@ -352,8 +352,9 @@ void MouseFix::Initialize()
 {
     ToolboxModule::Initialize();
 
-    auto address = GW::Scanner::Find("\xf7\xc3\x80\x20\x00\x00\x74\x09\x56", "xxxxxxxxx", 0x9);
+    auto address = GW::Scanner::Find("\xf7\xc3\x80\x20\x00\x00\x74\x09\x57", "xxxxxxxxx", 0x9);
     address = GW::Scanner::FunctionFromNearCall(address);
+    printf("\n\n\n\n\n\n\nadress chosen %p\n\n\n\n\n\n\n\n\n", (void*)address);
     if (GW::Scanner::IsValidPtr(address, GW::ScannerSection::Section_TEXT)) {
         ChangeCursorIcon_Func = (ChangeCursorIcon_pt)address;
         GW::HookBase::CreateHook((void**)&ChangeCursorIcon_Func, OnChangeCursorIcon, (void**)&ChangeCursorIcon_Ret);
