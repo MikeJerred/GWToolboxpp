@@ -183,11 +183,11 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         }
     }
     else if (!settings.noupdate) {
-        if (!DownloadWindow::DownloadAllFiles()) {
+        /* if (!DownloadWindow::DownloadAllFiles()) {
             ShowError(L"Failed to download GWToolbox DLL");
             fprintf(stderr, "DownloadWindow::DownloadAllFiles failed\n");
             return 1;
-        }
+        }*/
     }
 
     if (settings.pid) {

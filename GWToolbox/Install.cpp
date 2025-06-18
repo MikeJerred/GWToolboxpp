@@ -128,10 +128,10 @@ bool Install(const bool quiet)
         return false;
     }
 
-    if (!DownloadWindow::DownloadAllFiles()) {
+    /* if (!DownloadWindow::DownloadAllFiles()) {
         fprintf(stderr, "DownloadWindow::DownloadAllFiles failed\n");
         return false;
-    }
+    }*/
 
     if (!quiet) {
         MessageBoxW(nullptr, L"Installation successful", L"Installation", 0);
