@@ -143,7 +143,7 @@ namespace {
         Teamspeak5Module::Instance(),
         ObserverModule::Instance(),
         HintsModule::Instance(),
-        MouseFix::Instance(),
+        // MouseFix::Instance(),
         KeyboardLanguageFix::Instance(),
         GuildWarsSettingsModule::Instance(),
         PriceCheckerModule::Instance(),
