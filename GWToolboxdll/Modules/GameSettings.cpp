@@ -235,7 +235,7 @@ namespace {
     // If this ui message is adding an unlearnt skill to the tome window, block it
     void OnSkillList_UICallback(GW::UI::InteractionMessage* message, void* wParam, void* lParam) {
         GW::Hook::EnterHook();
-        const auto is_show_unlearned_skill = message->message_id == (GW::UI::UIMessage)0x47 && ((uint32_t*)wParam)[1] == 0x3;
+        const auto is_show_unlearned_skill = message->message_id == (GW::UI::UIMessage)0x48 && ((uint32_t*)wParam)[1] == 0x3;
         if (!(is_show_unlearned_skill && show_unlearned_skill)) {
             SkillList_UICallback_Ret(message, wParam, lParam);
         }
@@ -814,7 +814,7 @@ namespace {
         GW::GameThread::Enqueue([value_override]() {
             const auto frame = GW::UI::GetFrameByLabel(L"StatusOverride");
             if (!frame) return;
-            GW::UI::SendFrameUIMessage(frame, (GW::UI::UIMessage)0x51, (void*)value_override);
+            GW::UI::SendFrameUIMessage(frame, (GW::UI::UIMessage)0x52, (void*)value_override);
             });
     }
     
