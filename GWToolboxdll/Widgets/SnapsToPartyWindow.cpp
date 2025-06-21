@@ -56,10 +56,6 @@ namespace {
         OnPartyWindowHealthBars_UICallback_Ret(message, wParam, lParam);
         GW::Hook::LeaveHook();
     }
-    GW::HookEntry OnUIMessage_HookEntry;
-    void OnUIMessage(GW::HookStatus*, GW::UI::UIMessage, void*, void*) {
-        party_window_health_bars = nullptr;
-    }
 }
 
 std::unordered_map<uint32_t, SnapsToPartyWindow::PartyFramePosition> SnapsToPartyWindow::agent_health_bar_positions;
@@ -136,7 +132,6 @@ void SnapsToPartyWindow::Initialize()
 {
     ToolboxWidget::Initialize();
     is_movable = is_resizable = false;
-    GW::UI::RegisterUIMessageCallback(&OnUIMessage_HookEntry, GW::UI::UIMessage::kPreferenceValueChanged, OnUIMessage, 0x8000);
 }
 
 void SnapsToPartyWindow::Terminate()
