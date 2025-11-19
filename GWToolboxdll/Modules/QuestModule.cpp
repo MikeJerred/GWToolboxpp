@@ -442,7 +442,7 @@ void QuestModule::Initialize()
 {
     ToolboxModule::Initialize();
 
-    constexpr auto ui_messages = {
+    static constexpr auto ui_messages = {
         GW::UI::UIMessage::kQuestDetailsChanged,
         GW::UI::UIMessage::kQuestAdded,
         GW::UI::UIMessage::kClientActiveQuestChanged,

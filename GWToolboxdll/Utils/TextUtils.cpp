@@ -218,7 +218,7 @@ namespace TextUtils {
             return {};
         }
         // NB: GW uses code page 0 (CP_ACP)
-        constexpr auto try_code_pages = {CP_UTF8, CP_ACP};
+        static constexpr auto try_code_pages = {CP_UTF8, CP_ACP};
         for (const auto code_page : try_code_pages) {
             const auto size_needed = MultiByteToWideChar(code_page, MB_ERR_INVALID_CHARS, str.data(), static_cast<int>(str.size()), nullptr, 0);
             if (!size_needed)
@@ -239,7 +239,7 @@ namespace TextUtils {
             return "";
         }
         // NB: GW uses code page 0 (CP_ACP)
-        constexpr auto try_code_pages = {CP_UTF8, CP_ACP};
+        static constexpr auto try_code_pages = {CP_UTF8, CP_ACP};
         for (const auto code_page : try_code_pages) {
             const auto size_needed = WideCharToMultiByte(code_page, WC_ERR_INVALID_CHARS, str.data(), static_cast<int>(str.size()), nullptr, 0, nullptr, nullptr);
             if (!size_needed)
