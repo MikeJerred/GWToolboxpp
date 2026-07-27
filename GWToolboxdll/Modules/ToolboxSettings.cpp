@@ -40,17 +40,17 @@
 #if defined(_DEBUG) || defined(GWTB_HARNESS)
 #include <Modules/TestHarness.h>
 #endif
+
 #include <Modules/MouseFix.h>
 #include <Modules/PartyBroadcastModule.h>
 #include <Modules/PriceCheckerModule.h>
 #include <Modules/ResignLogModule.h>
 #include <Modules/TexmodModule.h>
+#include <Modules/SplashScreenModule.h>
 #include <Modules/TextToSpeechModule.h>
 #include <Modules/ToastNotifications.h>
 #include <Modules/VendorFix.h>
-
 #include <Widgets/VanquishMapOverlayWidget.h>
-
 #include <Windows/AccountInventoryWindow.h>
 #include <Windows/ArmoryWindow.h>
 #include <Windows/BuildsWindow.h>
@@ -77,18 +77,20 @@
 #include <Windows/RerollWindow.h>
 #include <Windows/TradeWindow.h>
 #include <Windows/TravelWindow.h>
+
 #ifdef _DEBUG
 #include <Windows/DoorMonitorWindow.h>
 #include <Windows/PacketLoggerWindow.h>
 #include <Windows/SkillListingWindow.h>
 #include <Windows/StringDecoderWindow.h>
+#include <Modules/RiverModule.h>
 #endif
+
 #include <Windows/GWMarketWindow.h>
 #include <Windows/InventorySorting.h>
 #include <Windows/PerformanceWindow.h>
 #include <Windows/SettingsWindow.h>
 #include <Windows/TargetInfoWindow.h>
-
 #include <Utils/ToolboxUtils.h>
 #include <Widgets/ActiveQuestWidget.h>
 #include <Widgets/AlcoholWidget.h>
@@ -108,10 +110,7 @@
 #include <Modules/DangerRingsModule.h>
 #include <Modules/LootBeaconsModule.h>
 #include <Modules/SkillRangeRingsModule.h>
-#ifdef _DEBUG
 #include <Modules/CartographerModule.h>
-#include <Modules/RiverModule.h>
-#endif
 #include <Widgets/MissionMapWidget.h>
 #include <Widgets/PartyDamage.h>
 #include <Widgets/SkillMonitorWidget.h>
@@ -209,8 +208,8 @@ namespace {
         {SkillRangeRingsModule::Instance(), false},
 #ifdef _DEBUG
         {RiverModule::Instance(), false},
-        CartographerModule::Instance(),
 #endif
+        CartographerModule::Instance(),
         PartyDamage::Instance(),
         BondsWidget::Instance(),
         ClockWidget::Instance(),
@@ -259,7 +258,8 @@ namespace {
         LoginModule::Instance(),
         {AccountInventoryWindow::Instance(), false},
         {PerformanceWindow::Instance(), false},
-        TexmodModule::Instance()
+        TexmodModule::Instance(),
+        {SplashScreenModule::Instance(), false}
     };
 
     bool modules_sorted = false;
@@ -586,6 +586,15 @@ void ToolboxSettings::DrawSettingsCogButtons()
     else if (hovered_cam) {
         ImGui::SetTooltip("Save a PNG screenshot of '%s'", hovered_cam->Name());
     }
+}
+
+void ToolboxSettings::RequestFullscreenScreenshot(const std::filesystem::path& path)
+{
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    pending_screenshot.active = true;
+    pending_screenshot.rect = ImRect({0.f, 0.f}, display);
+    pending_screenshot.path = path;
+    pending_screenshot.capture_at_frame = ImGui::GetFrameCount() + 1;
 }
 
 void ToolboxSettings::FlushPendingScreenshot(IDirect3DDevice9* device)
