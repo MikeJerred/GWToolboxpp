@@ -24,7 +24,7 @@
 #include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
-#include <Modules/CartographerModule.h>
+#include <Widgets/CartographerWidget.h>
 #include <Modules/GwDatModule.h>
 #include <Modules/Resources.h>
 #include <Widgets/Minimap/Minimap.h>
@@ -225,7 +225,6 @@ namespace {
     bool ContextMenuMarkerButtons()
     {
         if (ImGui::Button("Place Marker")) {
-            CartographerModule::OnUserMarkerAction();
             GW::GameThread::Enqueue([] {
                 QuestModule::SetCustomQuestMarker(world_map_click_pos, true);
             });
@@ -233,7 +232,6 @@ namespace {
         }
         if (QuestModule::GetCustomQuestMarker()) {
             if (ImGui::Button("Remove Marker")) {
-                CartographerModule::OnUserMarkerAction();
                 GW::GameThread::Enqueue([] {
                     QuestModule::SetCustomQuestMarker({0, 0});
                 });
@@ -371,9 +369,8 @@ namespace {
 
     uint32_t GetMapPropModelFileId(GW::MapProp* prop)
     {
-        if (!(prop && prop->h0034[4])) return 0;
-        uint32_t* sub_deets = (uint32_t*)prop->h0034[4];
-        return ArenaNetFileParser::FileHashToFileId((wchar_t*)sub_deets[1]);
+        if (!(prop && prop->model_info)) return 0;
+        return ArenaNetFileParser::FileHashToFileId(prop->model_info->model_file_name);
     };
 
     bool IsTravelPortal(GW::MapProp* prop)
@@ -443,10 +440,8 @@ namespace {
         for (auto prop : *props) {
             if (!IsTravelPortal(prop)) continue;
             // TOOD: If found is null or this prop->location is closer than the found one, this wins
-            // Calculate the distance between the current portal and the given location
             float distance = GW::GetDistance(prop->position, game_pos);
 
-            // If found is null or this portal is closer than the currently found one, update found
             if (!found || distance < closest_distance) {
                 found = prop;
                 closest_distance = distance;
@@ -515,7 +510,6 @@ namespace {
         });
     }
 
-    // Helper function to calculate rotated points
     void CalculateRotatedPoints(const ImRect& rect, const ImVec2& center, float rotation_angle, ImVec2 out_points[4])
     {
         ImVec2 points[4] = {
@@ -529,12 +523,10 @@ namespace {
             const float dx = points[i].x - center.x;
             const float dy = points[i].y - center.y;
 
-            // Apply the rotation transformation using rotation_angle
             out_points[i] = {center.x + dx * cos(rotation_angle) - dy * sin(rotation_angle), center.y + dx * sin(rotation_angle) + dy * cos(rotation_angle)};
         }
     }
 
-    // Helper function to calculate UV coordinates for a sprite map
     void CalculateUVCoords(float uv_start_x, float uv_end_x, ImVec2 uv_points[4])
     {
         uv_points[0] = {uv_start_x, 0.0f}; // Top-left
@@ -545,7 +537,6 @@ namespace {
 
 
 
-    // Function to calculate viewport position
     ImVec2 CalculateViewportPos(const GW::Vec2f& marker_world_pos, const ImVec2& top_left)
     {
         return {world_map_proj_scale.x * (marker_world_pos.x - top_left.x) + viewport_offset.x, world_map_proj_scale.y * (marker_world_pos.y - top_left.y) + viewport_offset.y};
@@ -811,7 +802,6 @@ namespace {
             color = QuestModule::GetQuestColor(quest->quest_id);
         }
 
-        // draw_quest_marker
         const auto draw_quest_marker = [&](const GW::Vec2f& quest_marker_pos) {
             const auto viewport_quest_pos = CalculateViewportPos(quest_marker_pos, world_map_context->top_left);
 
@@ -833,11 +823,9 @@ namespace {
             return icon_rect.Contains(ImGui::GetMousePos());
         };
 
-        // draw_quest_arrow
         const auto draw_quest_arrow = [&](const GW::Vec2f& quest_marker_pos) {
             const auto viewport_quest_pos = CalculateViewportPos(quest_marker_pos, world_map_context->top_left);
             const auto viewport_player_pos = CalculateViewportPos(player_world_map_pos, world_map_context->top_left);
-            // Calculate the vector from your position to the quest marker
             const float dx = viewport_quest_pos.x - viewport_player_pos.x;
             const float dy = viewport_quest_pos.y - viewport_player_pos.y;
 
@@ -1189,11 +1177,16 @@ void WorldMapWidget::Draw(IDirect3DDevice9*)
     mouse_offset.y *= -1;
     if (ImGui::Begin(Name(), &visible, GetWinFlags() | ImGuiWindowFlags_AlwaysAutoResize)) {
         window = ImGui::GetCurrentWindowRead();
-        bool carto_enabled = CartographerModule::GetEnabled();
-        if (ImGui::Checkbox("Cartographer helper", &carto_enabled)) {
+        bool carto_enabled = CartographerWidget::GetEnabled();
+        if (ImGui::Checkbox("Cartographer", &carto_enabled)) {
             GW::GameThread::Enqueue([carto_enabled] {
-                CartographerModule::SetEnabled(carto_enabled);
+                CartographerWidget::SetEnabled(carto_enabled);
             });
+        }
+        if (carto_enabled) {
+            ImGui::Indent();
+            CartographerWidget::DrawWorldMapOptions();
+            ImGui::Unindent();
         }
         if (ImGui::Checkbox("Show all areas", &settings.showing_all_outposts)) {
             GW::GameThread::Enqueue([] {
@@ -1317,7 +1310,6 @@ void WorldMapWidget::Draw(IDirect3DDevice9*)
     }
 
     hovered_quest_id = GW::Constants::QuestID::None;
-    // Draw all quest markers on world map if applicable
     if (settings.showing_all_quests) {
         if (const auto quest_log = GW::QuestMgr::GetQuestLog()) {
             for (auto& quest : *quest_log) {

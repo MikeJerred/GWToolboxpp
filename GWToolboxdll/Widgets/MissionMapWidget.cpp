@@ -12,7 +12,6 @@
 #include <GWCA/Utilities/Hooker.h>
 
 #include <ImGuiAddons.h>
-#include <Modules/CartographerModule.h>
 #include <Modules/GwDatModule.h>
 #include <Modules/QuestModule.h>
 #include <Modules/Resources.h>
@@ -241,7 +240,6 @@ namespace {
         }
 #endif
         if (ImGui::Button("Place Marker")) {
-            CartographerModule::OnUserMarkerAction();
             GW::GameThread::Enqueue([] {
                 QuestModule::SetCustomQuestMarker(world_map_click_pos, true);
             });
@@ -249,7 +247,6 @@ namespace {
         }
         if (QuestModule::GetCustomQuestMarker()) {
             if (ImGui::Button("Remove Marker")) {
-                CartographerModule::OnUserMarkerAction();
                 GW::GameThread::Enqueue([] { QuestModule::ClearCustomQuestMarker(); });
                 return false;
             }
@@ -262,10 +259,8 @@ namespace {
     }
 
     // --- Walkable terrain overlay -----------------------------------------------
-    // Shades non-walkable parts of the map grey and outlines walkable terrain.
-    // Unlike the Vanquish overlay's map grid, this has no reachability/BFS, no
-    // fog-of-war and no enemy tracking — it's a static rasterization of every
-    // trapezoid in the pathing map, independent of the Vanquish widget entirely.
+    // Static rasterization of every pathing-map trapezoid; unlike the Vanquish overlay
+    // there is no reachability/BFS, fog-of-war or enemy tracking, and no shared state.
     constexpr float TERRAIN_CELL_SIZE = GW::Constants::Range::Adjacent / 2.f;
 
     struct TerrainTrapezoidSnapshot {

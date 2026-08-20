@@ -21,6 +21,7 @@
 #include <Modules/Resources.h>
 #include <Timer.h>
 #include <Utils/TextUtils.h>
+#include <Utils/TextUtils_Time.h>
 
 #define MAP_ENTRY(var) \
     {                  \
@@ -209,11 +210,9 @@ namespace {
     };
 
     std::filesystem::path GetItemDropCSVFilename() {
-        // Generate filename with current date
         const auto now = std::chrono::system_clock::now();
         const auto time = std::chrono::system_clock::to_time_t(now);
-        std::tm tm;
-        localtime_s(&tm, &time);
+        std::tm tm = TextUtils::Time::SafeLocaltime(time);
 
         wchar_t date_buffer[32];
         std::wcsftime(date_buffer, sizeof(date_buffer) / sizeof(wchar_t), L"%Y-%m-%d", &tm);
@@ -326,7 +325,6 @@ namespace {
         }
         std::filesystem::create_directories(drops_filename.parent_path(),ec);
 
-        // Open file with nothrow
         std::wofstream my_file;
         my_file.exceptions(std::ios::goodbit); // Disable exceptions
         my_file.open(drops_filename.c_str(), std::ios::app);
@@ -336,7 +334,6 @@ namespace {
             return;
         }
 
-        // Write header if new file
         if (!file_exists) {
             my_file << ItemDrops::PendingDrop::GetCSVHeader() << L"\n";
             if (my_file.fail()) {
@@ -345,7 +342,6 @@ namespace {
             }
         }
 
-        // Write data
         for (const auto& pending : pending_write_to_csv) {
             my_file << pending->toCSV() << L"\n";
             if (my_file.fail()) {

@@ -5,6 +5,7 @@
 #include <Modules/Resources.h>
 #include <Utils/SettingsRegistry.h>
 #include <Utils/TextUtils.h>
+#include <Utils/TextUtils_Time.h>
 
 #include "BackupModule.h"
 #include "CodeOptimiserModule.h"
@@ -19,10 +20,9 @@ namespace {
 
     static void get_dos_dt(uint16_t& t, uint16_t& d)
     {
-        SYSTEMTIME st;
-        GetLocalTime(&st);
-        t = static_cast<uint16_t>((st.wHour << 11) | (st.wMinute << 5) | (st.wSecond / 2));
-        d = static_cast<uint16_t>(((st.wYear - 1980) << 9) | (st.wMonth << 5) | st.wDay);
+        const auto st = TextUtils::Time::GetCurrentSystemTime();
+        t = static_cast<uint16_t>((st.hour << 11) | (st.minute << 5) | (st.second / 2));
+        d = static_cast<uint16_t>(((st.year - 1980) << 9) | (st.month << 5) | st.day);
     }
 
     // --- Little-endian helpers --------------------------------------------
@@ -194,7 +194,6 @@ namespace {
                 continue;
             }
 
-            // Seek to local file header.
             fseek(f, static_cast<long>(local_off), SEEK_SET);
             uint32_t local_sig;
             if (!r32(f, local_sig) || local_sig != 0x04034B50u) {
@@ -281,7 +280,6 @@ namespace {
         return false;
     }
 
-    // Read a file in binary mode into a byte vector.
     static bool read_binary(const std::filesystem::path& path, std::vector<uint8_t>& out)
     {
         FILE* f = _wfopen(path.c_str(), L"rb");

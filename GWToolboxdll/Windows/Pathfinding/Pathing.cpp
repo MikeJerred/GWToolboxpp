@@ -3,7 +3,10 @@
 #include <array>
 #include <map>
 
+#include <GWCA/Constants/Constants.h>
 #include <GWCA/Context/MapContext.h>
+#include <GWCA/GameEntities/Agent.h>
+#include <GWCA/Managers/AgentMgr.h>
 #include <GWCA/Managers/GameThreadMgr.h>
 #include <GWCA/Managers/MapMgr.h>
 
@@ -380,6 +383,183 @@ namespace Pathing {
         return false;
     }
 
+    namespace {
+        // Live props carry their own collision radius; DAT-loaded ones do not, and the record's
+        // scale field is still undecoded, so those fall back to a middling constant.
+        constexpr float kUnknownPortalHalfWidth = 250.f;
+
+        float PortalHalfWidth(const PortalProp& portal)
+        {
+            return portal.radius > 0.f ? portal.radius : kUnknownPortalHalfWidth;
+        }
+
+        std::vector<PortalProp> portal_cache;
+        GW::Constants::MapID portal_cache_map = static_cast<GW::Constants::MapID>(0);
+        GW::Constants::InstanceType portal_cache_instance = GW::Constants::InstanceType::Loading;
+
+        const std::vector<PortalProp>& CurrentMapPortals()
+        {
+            const auto map_id = GW::Map::GetMapID();
+            const auto instance_type = GW::Map::GetInstanceType();
+            if (map_id != portal_cache_map || instance_type != portal_cache_instance) {
+                portal_cache.clear();
+                ParsePortalPropsFromMapContext(GW::GetMapContext(), portal_cache);
+                portal_cache_map = map_id;
+                portal_cache_instance = instance_type;
+            }
+            return portal_cache;
+        }
+
+        float SideOfLine(const GW::Vec2f& a, const GW::Vec2f& b, const GW::Vec2f& p)
+        {
+            return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+        }
+
+        bool SegmentsCross(const GW::Vec2f& a, const GW::Vec2f& b, const GW::Vec2f& c, const GW::Vec2f& d)
+        {
+            const float d1 = SideOfLine(a, b, c);
+            const float d2 = SideOfLine(a, b, d);
+            const float d3 = SideOfLine(c, d, a);
+            const float d4 = SideOfLine(c, d, b);
+            return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0));
+        }
+    } // namespace
+
+    bool CrossesTravelPortal(const GW::Vec2f& a, const GW::Vec2f& b)
+    {
+        for (const auto& portal : CurrentMapPortals()) {
+            const float half_width = PortalHalfWidth(portal);
+            if (!portal.has_facing) {
+                // No facing to build a doorway from, so fall back to the prop's footprint: block
+                // when the step ends up inside it.
+                const float dx = b.x - portal.pos.x;
+                const float dy = b.y - portal.pos.y;
+                if (dx * dx + dy * dy < half_width * half_width) return true;
+                continue;
+            }
+            // The doorway spans across the facing, so the gate line runs along the perpendicular.
+            const float cos_f = cosf(portal.facing_radians);
+            const float sin_f = sinf(portal.facing_radians);
+            const GW::Vec2f left{portal.pos.x - sin_f * half_width, portal.pos.y + cos_f * half_width};
+            const GW::Vec2f right{portal.pos.x + sin_f * half_width, portal.pos.y - cos_f * half_width};
+            if (SegmentsCross(a, b, left, right)) return true;
+        }
+        return false;
+    }
+
+    bool CopyBlockedPlanes(std::vector<uint32_t>& out)
+    {
+        auto* mapContext = GW::GetMapContext();
+        auto* path = mapContext ? mapContext->path : nullptr;
+        if (!path) return false;
+        const auto& blocked = path->blockedPlanes;
+        out.assign(blocked.begin(), blocked.begin() + blocked.size());
+        return true;
+    }
+
+    std::unordered_set<const GW::PathingTrapezoid*> FindReachableTrapezoids()
+    {
+        std::unordered_set<const GW::PathingTrapezoid*> reachable;
+        auto* mapContext = GW::GetMapContext();
+        auto* path = mapContext ? mapContext->path : nullptr;
+        if (!path || !path->staticData) return reachable;
+        auto* map = &path->staticData->map;
+
+        const auto* player = GW::Agents::GetControlledCharacter();
+        if (!player) return reachable;
+
+        GW::PathingTrapezoid* start_trap = nullptr;
+        size_t start_plane = player->pos.zplane;
+        if (player->pos.zplane < map->size()) start_trap = FindTrapezoid(player->pos, map);
+        for (uint32_t z = 0; !start_trap && z < map->size(); z++) {
+            GW::GamePos probe = player->pos;
+            probe.zplane = z;
+            start_trap = FindTrapezoid(probe, map);
+            start_plane = z;
+        }
+        if (!start_trap) return reachable;
+
+        struct TrapRef {
+            const GW::PathingTrapezoid* trap;
+            size_t plane;
+        };
+        std::vector<TrapRef> queue{{start_trap, start_plane}};
+        reachable.insert(start_trap);
+
+        const auto centre = [](const GW::PathingTrapezoid* t) {
+            return GW::Vec2f{(t->XTL + t->XTR + t->XBL + t->XBR) * .25f, (t->YT + t->YB) * .5f};
+        };
+
+        for (size_t head = 0; head < queue.size(); head++) {
+            const auto [trap, plane_idx] = queue[head];
+            const GW::Vec2f from = centre(trap);
+            for (const auto* adj : trap->adjacent) {
+                if (!adj || reachable.contains(adj)) continue;
+                // Stepping into a travel portal changes map, so the ground past one is not
+                // somewhere walking gets you - it belongs to the map on the other side.
+                if (CrossesTravelPortal(from, centre(adj))) continue;
+                reachable.insert(adj);
+                queue.push_back({adj, plane_idx});
+            }
+            if (plane_idx >= map->size()) continue;
+            const auto& pm = (*map)[plane_idx];
+            const auto expand_portal = [&](const uint16_t portal_idx) {
+                if (portal_idx >= pm.portal_count) return;
+                const auto& portal = pm.portals[portal_idx];
+                if (portal.flags & 0x04) return;
+                const auto* pair = portal.pair;
+                if (!pair) return;
+                const size_t target_plane = portal.neighbor_plane;
+                if (target_plane < path->blockedPlanes.size() && path->blockedPlanes[target_plane] & 1) return;
+                for (uint32_t i = 0; i < pair->count; i++) {
+                    const auto* t = pair->trapezoids[i];
+                    if (t && reachable.insert(t).second) queue.push_back({t, target_plane});
+                }
+            };
+            expand_portal(trap->portal_left);
+            expand_portal(trap->portal_right);
+        }
+        return reachable;
+    }
+
+    namespace {
+        std::unordered_set<const GW::PathingTrapezoid*> reachable_cache;
+        std::vector<uint32_t> reachable_cache_blocked_planes;
+        GW::Constants::MapID reachable_cache_map = static_cast<GW::Constants::MapID>(0);
+        GW::Constants::InstanceType reachable_cache_instance = GW::Constants::InstanceType::Loading;
+    } // namespace
+
+    bool IsPositionReachable(const GW::GamePos& point)
+    {
+        auto* mapContext = GW::GetMapContext();
+        auto* path = mapContext ? mapContext->path : nullptr;
+        if (!path || !path->staticData) return false;
+        auto* map = &path->staticData->map;
+
+        const auto map_id = GW::Map::GetMapID();
+        const auto instance_type = GW::Map::GetInstanceType();
+        std::vector<uint32_t> blocked;
+        CopyBlockedPlanes(blocked);
+        // Gates opening or closing move whole regions in and out of reach, so the set is rebuilt
+        // on any change to that state rather than held for the life of the map.
+        if (map_id != reachable_cache_map || instance_type != reachable_cache_instance || blocked != reachable_cache_blocked_planes) {
+            reachable_cache = FindReachableTrapezoids();
+            reachable_cache_blocked_planes = std::move(blocked);
+            reachable_cache_map = map_id;
+            reachable_cache_instance = instance_type;
+        }
+        // No start trapezoid means we cannot say what is cut off, so fall back to walkability
+        // rather than declaring the whole map unreachable.
+        if (reachable_cache.empty()) return IsPositionWalkable(point);
+
+        for (uint32_t z = 0; z < map->size(); ++z) {
+            GW::GamePos probe = point;
+            probe.zplane = z;
+            if (const auto* trap = FindTrapezoid(probe, map); trap && reachable_cache.contains(trap)) return true;
+        }
+        return false;
+    }
+
     // PathingMapData-based overloads (no MapContext needed)
     GW::PathingTrapezoid* FindTrapezoid(const GW::GamePos& point, const Pathing::PathingMapData* mapData)
     {
@@ -544,7 +724,7 @@ namespace Pathing {
         return closest;
     }
 
-    uint32_t FileHashToFileId(wchar_t* param_1)
+    uint32_t FileHashToFileId(const wchar_t* param_1)
     {
         if (!param_1) return 0;
         if (((0xff < *param_1) && (0xff < param_1[1])) && ((param_1[2] == 0 || ((0xff < param_1[2] && (param_1[3] == 0)))))) {
@@ -555,9 +735,8 @@ namespace Pathing {
 
     const uint32_t GetMapPropModelFileId(GW::MapProp* prop)
     {
-        if (!(prop && prop->h0034[4])) return 0;
-        uint32_t* sub_deets = (uint32_t*)prop->h0034[4];
-        return FileHashToFileId((wchar_t*)sub_deets[1]);
+        if (!(prop && prop->model_info)) return 0;
+        return FileHashToFileId(prop->model_info->model_file_name);
     };
     bool IsTeleporter(GW::MapProp* prop)
     {
@@ -2292,8 +2471,8 @@ namespace Pathing {
             PATH_LOG_INFO("[AStar] insert: start=(%.0f,%.0f,z%d) trap=%d edges=%zu | goal=(%.0f,%.0f,z%d) trap=%d edges=%zu",
                 start_pos.x, start_pos.y, (int)start_pos.zplane, (int)spt->id, sb.start_edges.size(),
                 goal_pos.x, goal_pos.y, (int)goal_pos.zplane, (int)gpt->id, sb.goal_edges.size());
+            m_path.insertPoint(goal_pos); // goal-first: finalize() reverses to start..goal
             m_path.insertPoint(start_pos);
-            m_path.insertPoint(goal_pos);
             m_path.setCost(GW::GetDistance(start_pos, goal_pos));
             m_path.finalize();
             return Error::FailedToFinializePath;
@@ -2307,8 +2486,9 @@ namespace Pathing {
             const auto& vis = SE[i];
             if (vis.point_id != GOAL_ID) continue;
             if ((vis.blocked_planes & current_blocked_planes).none()) {
-                m_path.insertPoint(start_pos);
+                // Goal-first, like BuildPath: finalize() reverses, so points() comes back start..goal.
                 m_path.insertPoint(goal_pos);
+                m_path.insertPoint(start_pos);
                 m_path.setCost(vis.distance);
                 m_path.finalize();
                 return Error::OK;

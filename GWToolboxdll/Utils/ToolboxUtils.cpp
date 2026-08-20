@@ -34,6 +34,8 @@
 #include <GWCA/Managers/ItemMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 #include <GWCA/Utilities/Scanner.h>
+
+#include <Defines.h>
 #include <Modules/Resources.h>
 #include <Timer.h>
 #include <Utils/GuiUtils.h>
@@ -316,13 +318,11 @@ namespace GW {
 
             // Navigate to target character by selecting previous/next until we reach it
             while (target_idx < selected_idx) {
-                // Need to go backwards - select the previous character
                 if (selected_idx == 0) break; // Can't go before first character
                 if (!select_char(selected_idx - 1)) return false;
             }
 
             while (target_idx > selected_idx) {
-                // Need to go forwards - select the next character
                 const auto chars_size = ctx->chars.size();
                 if (!chars_size || selected_idx + 1 >= chars_size) break; // Can't go past last character
                 if (!select_char(selected_idx + 1)) return false;
@@ -428,6 +428,7 @@ namespace GW {
         {
             if (!account_uuid) {
                 auto address = GW::Scanner::Find("\x50\x6a\x18\x6a\x02\xff\x15", "xxxxxxx", 0x7);
+                DEBUG_ASSERT(address);
                 if (address && GW::Scanner::IsValidPtr(*(uintptr_t*)address, GW::ScannerSection::Section_DATA)) {
                     address = *(uintptr_t*)address;
                     account_uuid = (GUID*)(address + 0x90);
@@ -1274,6 +1275,12 @@ namespace ToolboxUtils {
         return player && IsPlayerInParty(player->player_number);
     }
 
+    // Check if agent is in player's own party (0)
+    bool IsAgentInMyParty(const uint32_t agent_id)
+    {
+        return GW::PartyMgr::IsAgentInParty(agent_id, 0);
+    }
+
     float GetSkillRange(const GW::Constants::SkillID skill_id)
     {
         const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
@@ -1569,7 +1576,6 @@ namespace ToolboxUtils {
         if (item->customized && ctre::search<dmg_plus_20_pattern>(original)) {
             // Remove "\nDamage +20%" > "\n"
             original = TextUtils::ctre_regex_replace<dmg_plus_20_pattern, L"">(original);
-            // Append "Customized"
             original += L"\x2\x102\x2\x108\x107"
                         L"Customized\x1";
         }

@@ -225,12 +225,12 @@ namespace {
     {
         const auto p = [](const Climate c, std::vector<ClimateWeather> e) { return ClimateProfile{c, std::move(e)}; };
         return {
-            p(Climate::Temperate, {{"Light Rain", 0.1f}, {"Heavy Rain", 0.05f}, {"Fog", 0.02f}}),
-            p(Climate::Tropical, {{"Heavy Rain", 0.2f}, {"Light Rain", 0.1f}, {"Fog", 0.05f}}),
-            p(Climate::Arid, {{"Light Rain", 0.1f}}),
-            p(Climate::Desertous, {{"Light Rain", 0.05f}, {"Sandstorm", 0.15f}}),
-            p(Climate::Mountainous, {{"Snow", 0.4f}, {"Blizzard", 0.15f}}),
-            p(Climate::Volcanic, {{"Ashfall", 0.4f}, {"Fog", 0.05f}}),
+            p(Climate::Temperate, {{"Light Rain", 0.01f}, {"Heavy Rain", 0.005f}, {"Fog", 0.002f}}),
+            p(Climate::Tropical, {{"Heavy Rain", 0.02f}, {"Light Rain", 0.01f}, {"Fog", 0.005f}}),
+            p(Climate::Arid, {{"Light Rain", 0.01f}}),
+            p(Climate::Desertous, {{"Light Rain", 0.005f}, {"Sandstorm", 0.015f}}),
+            p(Climate::Mountainous, {{"Snow", 0.04f}, {"Blizzard", 0.015f}}),
+            p(Climate::Volcanic, {{"Ashfall", 0.04f}, {"Fog", 0.005f}}),
         };
     }
     std::vector<ClimateProfile> climate_profiles = DefaultClimateProfiles();
@@ -243,7 +243,7 @@ namespace {
     float ambient_strength = 0.f;             // eased aggregate dimming of active conditions (runtime, not saved)
     float weather_intensity = 0.f;            // eased 0..1 cross-fade of the shown condition (runtime): 1 = full, 0 = faded out
 
-    bool auto_weather = true;    // drive which conditions are active from the climate->weather table
+    bool auto_weather = false;    // drive which conditions are active from the climate->weather table
     float auto_change_min = 2.f; // minutes between automatic weather rolls (random in [min, max])
     float auto_change_max = 5.f;
     Climate auto_climate = Climate::Temperate; // climate the current automatic weather was last rolled for (runtime)
@@ -274,7 +274,6 @@ namespace {
         return false;
     }
 
-    // Climate for a specific map.
     Climate ClimateForMap(const GW::Constants::MapID map_id)
     {
         // @Enhancement: We could handle edge case maps by inspecting textures used by the DAT file matching the map and counting stuff like sand, snow etc, but thats overkill atm.
@@ -958,7 +957,6 @@ namespace {
         return true;
     }
 
-    // Advance every active condition and accumulate its geometry, then upload once per frame.
     // Build a soft round puff texture at runtime (no .dat asset): white RGB with a smooth radial alpha falloff,
     // so overlapping cloud billboards blend into a continuous fog bank instead of showing hard quad edges.
     bool BuildCloudTexture(IDirect3DDevice9* device)
@@ -1651,7 +1649,11 @@ void WeatherModule::DrawSettings()
                 }
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(110.f);
-                ImGui::DragFloat("##weight", &cp.entries[e].weight, 0.01f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                // Shown as a 0-100% chance, but stored as the 0..1 fraction it has always been (existing configs load unchanged).
+                float weight_pct = cp.entries[e].weight * 100.f;
+                if (ImGui::DragFloat("##weight", &weight_pct, 0.1f, 0.f, 100.f, "%.1f%%", ImGuiSliderFlags_AlwaysClamp))
+                    cp.entries[e].weight = std::clamp(weight_pct / 100.f, 0.f, 1.f);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Chance this condition is picked for the climate on each weather roll.");
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Remove##ent")) ent_remove = e;
                 ImGui::PopID();
@@ -1660,7 +1662,7 @@ void WeatherModule::DrawSettings()
             if (ImGui::SmallButton("Add condition##ent")) cp.entries.push_back({conditions.empty() ? "" : conditions.front().name, 0.3f});
             float sum = 0.f;
             for (const auto& e : cp.entries) sum += std::max(0.f, e.weight);
-            ImGui::Text("Clear weather: %.0f%%", std::max(0.f, 1.f - sum) * 100.f);
+            ImGui::Text("Clear weather: %.1f%%", std::max(0.f, 1.f - sum) * 100.f);
             if (ImGui::Button("Remove climate")) climate_remove = i;
         }
         ImGui::PopID();

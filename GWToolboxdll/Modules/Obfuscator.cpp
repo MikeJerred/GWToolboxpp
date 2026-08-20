@@ -256,14 +256,11 @@ namespace {
     std::wstring speech_message_temp_message;
 
 
-    // List of obfuscated names, keyed by obfuscated
     std::map<std::wstring, std::wstring> obfuscated_by_obfuscation;
-    // List of obfuscated names, keyed by original
     std::map<std::wstring, std::wstring> obfuscated_by_original;
     // Current position in the list of obfuscated names
     size_t pool_index = 0;
 
-    // Current state
     enum class ObfuscatorState : uint8_t {
         Disabled,
         Enabled
@@ -574,7 +571,6 @@ namespace {
             }
             break;
             case GW::UI::UIMessage::kDialogBody: {
-                // Dialog body
                 const auto packet_actual = static_cast<GW::UI::DialogBodyInfo*>(wParam);
                 if (packet_actual->message_enc && ObfuscateMessage(packet_actual->message_enc, ui_message_temp_message)) {
                     packet_actual->message_enc = ui_message_temp_message.data();
@@ -848,9 +844,11 @@ void Obfuscator::Initialize()
     Reset();
 
     const auto GetCharacterSummary_Assertion = GW::Scanner::FindAssertion(R"(p:\code\gw\ui\char\uichinfo.cpp)", "!StrCmp(m_characterName, characterInfo.characterName)",0,0);
+    DEBUG_ASSERT(GetCharacterSummary_Assertion);
     if (GetCharacterSummary_Assertion) {
         // Hook to override character names on login screen
         GetCharacterSummary_Func = reinterpret_cast<GetCharacterSummary_pt>(GW::Scanner::ToFunctionStart(GetCharacterSummary_Assertion));
+        DEBUG_ASSERT(GetCharacterSummary_Func);
         GW::Hook::CreateHook((void**)&GetCharacterSummary_Func, OnGetCharacterSummary, reinterpret_cast<void**>(&RetGetCharacterSummary));
         GW::Hook::EnableHooks(GetCharacterSummary_Func);
         // Patch to allow missing character summary
@@ -859,6 +857,7 @@ void Obfuscator::Initialize()
     }
 
     GetAccountData_Func = (GetAccountData_pt)GW::Scanner::ToFunctionStart(GW::Scanner::FindAssertion(R"(p:\code\gw\ui\game\vendor\vnacctnameset.cpp)", "charName", 0, 0));
+    DEBUG_ASSERT(GetAccountData_Func);
     if (GetAccountData_Func) {
         GW::Hook::CreateHook((void**)&GetAccountData_Func, OnGetAccountInfo, reinterpret_cast<void**>(&GetAccountData_Ret));
         GW::Hook::EnableHooks(GetAccountData_Func);

@@ -77,15 +77,15 @@ namespace {
         return nullptr;
     }
 
-    // API Configuration structure
     struct APIConfig {
         GenerateVoiceCallback callback;
         const char* name;
         const char* signup_url;
         const char* note = nullptr;
         bool has_user_id = false;
-        char api_key[128] = {0};
-        char user_id[128] = {0};
+        // Some providers issue long keys (e.g. OpenAI project keys are ~200 chars), and Kokoro stores a server URL here
+        char api_key[512] = {0};
+        char user_id[512] = {0};
     };
 
     GW::Constants::Language GetAudioLanguage()
@@ -770,7 +770,6 @@ Gender GetGenderByFileId(const uint32_t file_id)
     GW::HookEntry UIMessage_HookEntry;
     GW::HookEntry PreUIMessage_HookEntry;
 
-    // Forward declaration
     void GenerateVoice(std::shared_ptr<PendingNPCAudio> audio);
 
     void GenerateVoiceFromDecodedString(std::shared_ptr<PendingNPCAudio> audio)
@@ -1835,12 +1834,18 @@ void TextToSpeechModule::DrawSettingsInternal()
 
     if (api_config) {
         if (!is_api_locked_down) {
+            // Fill the rest of the line, leaving room for the show/hide password button
+            const auto secret_input_width = [] {
+                return std::max(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x, 100.f * ImGui::FontScale());
+            };
             ImGui::Text("%s API Key: ", api_config->name);
             ImGui::SameLine();
+            ImGui::SetNextItemWidth(secret_input_width());
             ImGui::InputTextSecret("###current provider API Key", api_config->api_key, _countof(api_config->api_key), &show_passwords);
             if (api_config->has_user_id) {
                 ImGui::Text("%s User ID: ", api_config->name);
                 ImGui::SameLine();
+                ImGui::SetNextItemWidth(secret_input_width());
                 ImGui::InputTextSecret("###current provider User ID", api_config->user_id, _countof(api_config->user_id), &show_passwords);
             }
             ImGui::TextColored(col.Value, "Click Here to get %s API credentials", api_config->name);

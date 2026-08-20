@@ -275,7 +275,6 @@ void PartySearchWindow::Initialize()
             }
         }
     });
-    // local messages
     GW::StoC::RegisterPostPacketCallback(&OnMessageLocal_Entry, GAME_SMSG_PARTY_SEARCH_REMOVE, OnRegionPartyUpdated);
     GW::StoC::RegisterPostPacketCallback(&OnMessageLocal_Entry, GAME_SMSG_PARTY_SEARCH_SIZE, OnRegionPartyUpdated);
     GW::StoC::RegisterPostPacketCallback(&OnMessageLocal_Entry, GAME_SMSG_PARTY_SEARCH_ADVERTISEMENT, OnRegionPartyUpdated);
@@ -546,14 +545,12 @@ void PartySearchWindow::fetch()
     }
 
     ws_window->dispatch([this](const std::string& data) {
-        // Add to message feed
         Message msg;
         if (!parse_json_message(data, &msg)) {
             return; // Not valid message object
         }
         messages.add(msg);
 
-        // Check alerts
         // do not display trade chat while in kamadan AE district 1
         const bool print_message = settings.print_game_chat && IsLfpAlert(msg.message);
 
@@ -572,25 +569,10 @@ bool PartySearchWindow::IsLfpAlert(std::string& message) const
     if (!settings.filter_alerts) {
         return true;
     }
-    std::regex word_regex;
-    std::smatch m;
-    static const auto regex_check = std::regex("^/(.*)/[a-z]?$", std::regex::ECMAScript | std::regex::icase);
+    // A word wrapped in slashes is a regex, anything else a case-insensitive substring.
     for (const auto& word : alert_words) {
-        if (std::regex_search(word, m, regex_check)) {
-            try {
-                word_regex = std::regex(m._At(1).str(), std::regex::ECMAScript | std::regex::icase);
-            } catch (const std::exception&) {
-                // Silent fail; invalid regex
-            }
-            if (std::regex_search(message, word_regex)) {
-                return true;
-            }
-        }
-        else {
-            auto found = std::ranges::search(message, word, [](const char c1, const char c2) -> bool { return tolower(c1) == c2; }).begin();
-            if (found != message.end()) {
-                return true;
-            }
+        if (word.Matches(message)) {
+            return true;
         }
     }
     return false;
@@ -713,7 +695,6 @@ void PartySearchWindow::Draw(IDirect3DDevice9*)
 
             if (ImGui::Button(label, ImVec2(playernamewidth, 0))) {
                 std::wstring leader_name = TextUtils::StringToWString(party->player_name);
-                // open whisper to player
                 GW::GameThread::Enqueue([leader_name] {
                     SendUIMessage(GW::UI::UIMessage::kOpenWhisper, (wchar_t*)leader_name.data(), nullptr);
                 });
@@ -760,7 +741,7 @@ void PartySearchWindow::DrawAlertsWindowContent(bool)
     ImGui::TextDisabled("(Each line is a separate keyword. Not case sensitive.)");
     if (ImGui::InputTextMultiline("##alertfilter", alert_buf, ALERT_BUF_SIZE,
                                   ImVec2(-1.0f, 0.0f))) {
-        ParseBuffer(alert_buf, alert_words);
+        alert_words = TextUtils::ParsePatterns<char>(alert_buf);
         alertfile_dirty = true;
     }
 }
@@ -780,7 +761,7 @@ void PartySearchWindow::LoadSettings(SettingsDoc& doc, ToolboxIni* legacy)
     if (alert_file.is_open()) {
         alert_file.get(alert_buf, ALERT_BUF_SIZE, '\0');
         alert_file.close();
-        ParseBuffer(alert_buf, alert_words);
+        alert_words = TextUtils::ParsePatterns<char>(alert_buf);
     }
     alert_file.close();
 }
@@ -798,19 +779,6 @@ void PartySearchWindow::SaveSettings(SettingsDoc& doc)
             bycontent_file.close();
             alertfile_dirty = false;
         }
-    }
-}
-
-void PartySearchWindow::ParseBuffer(const char* text, std::vector<std::string>& words)
-{
-    words.clear();
-    std::istringstream stream(text);
-    std::string word;
-    while (std::getline(stream, word)) {
-        for (size_t i = 0; i < word.length(); i++) {
-            word[i] = static_cast<char>(tolower(word[i]));
-        }
-        words.push_back(word);
     }
 }
 
