@@ -42,7 +42,7 @@ namespace
         }
 
         const auto skillData = GW::SkillbarMgr::GetSkillConstantData(id);
-        if (!skillData || (uint32_t)id >= (uint32_t)GW::Constants::SkillID::Count) return "";
+        if (!skillData || (uint32_t)id > (uint32_t)GW::Constants::SkillID::Dhuums_Covenant_Broken) return "";
 
         wchar_t out[8] = {0};
         if (GW::UI::UInt32ToEncStr(skillData->name, out, _countof(out))) 
