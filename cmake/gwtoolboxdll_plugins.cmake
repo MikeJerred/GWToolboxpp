@@ -138,4 +138,3 @@ target_sources(ShadowstepPredictor PRIVATE
 add_tb_plugin(Slowload)
 add_tb_plugin(SpeedrunScriptingTools)
 add_tb_plugin(SkinChanger)
-�R
