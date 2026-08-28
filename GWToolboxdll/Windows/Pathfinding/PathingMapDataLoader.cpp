@@ -112,7 +112,7 @@ namespace Pathing {
         for (auto* prop : props->propArray) {
             const uint32_t fid = MapPropModelFileId(prop);
             if (IsPortalModelFileId(fid))
-                out.push_back({{prop->position.x, prop->position.y}, fid, prop->rotation_angle, true, MapPropRadius(prop)});
+                out.push_back({{prop->position.x, prop->position.y}, fid, MapPropRadius(prop)});
         }
     }
 
@@ -474,7 +474,9 @@ namespace Pathing {
             if (filename_index < fn_count) {
                 uint32_t fid = prop_file_ids[filename_index];
                 if (IsPortalModelFileId(fid)) {
-                    out.push_back({{px, pz}, fid});
+                    float radius;
+                    memcpy(&radius, pi_data + pi_off + 42, 4);
+                    out.push_back({{px, pz}, fid, radius});
                 }
             }
             pi_off += 48 + num_structs * 8;

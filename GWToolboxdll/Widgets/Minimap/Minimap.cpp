@@ -90,9 +90,6 @@ namespace {
 
     clock_t last_moved = 0;
 
-    /**
-     * Wrap runtime variables in o MinimapRenderContext - expose them as refs for our internal settings
-     */
     MinimapRenderContext default_minimap_context{
         .background_color = 0,
         .foreground_color = 0xFF999999,
@@ -139,14 +136,6 @@ namespace {
     float cardinal_offset = 0.0f;     // game-unit offset from compass edge; +ve = outward
     float cardinal_font_size = 13.0f; // screen-space font size in pixels
 
-    // Projects a game-world position to an ImGui screen pixel, using the same
-    // transform chain that Minimap::Render / RenderSetupProjection applies.
-    //
-    // View chain (Minimap::Render):
-    //   translate(-me->pos) * rotateZ(-rotation + PI/2) * scale(zoom) * translate(pan)
-    // Projection (RenderSetupProjection):
-    //   ortho: ±5000 game units → ±1 NDC
-    //   viewport: NDC → pixels via base_scale and anchor_point
     ImVec2 WorldToScreen(const GW::Vec2f& world_pos, const MinimapRenderContext& ctx, const GW::Vec2f& me_pos)
     {
         GW::Vec2f v = world_pos - me_pos; // translate so player is at origin
@@ -893,7 +882,7 @@ void Minimap::OnUIMessage(GW::HookStatus* status, const GW::UI::UIMessage msgid,
         } break;
         case GW::UI::UIMessage::kSkillActivated: {
             const auto packet = static_cast<GW::UI::UIPacket::kAgentSkillPacket*>(wParam);
-            ASSERT(packet && packet->skill_id < GW::Constants::SkillID::Count && packet->agent_id);
+            ASSERT(packet && (uint32_t)packet->skill_id < GW::SkillbarMgr::GetSkillCount() && packet->agent_id);
             if (packet->agent_id == GW::Agents::GetControlledCharacterId()) {
                 if (packet->skill_id == GW::Constants::SkillID::Shadow_of_Haste || packet->skill_id == GW::Constants::SkillID::Shadow_Walk) {
                     shadowstep_location = GW::Agents::GetControlledCharacter()->pos;
@@ -1495,10 +1484,7 @@ void Minimap::Render(IDirect3DDevice9* device, const MinimapRenderContext& conte
         return;
     }
 
-    IDirect3DStateBlock9* d3d9_state_block = nullptr;
-    if (device->CreateStateBlock(D3DSBT_ALL, &d3d9_state_block) < 0) {
-        return;
-    }
+    const D3DStateGuard state_guard(device);
 
     D3DMATRIX reset_world;
     D3DMATRIX reset_view;
@@ -1641,9 +1627,6 @@ void Minimap::Render(IDirect3DDevice9* device, const MinimapRenderContext& conte
     device->SetTransform(D3DTS_WORLD, &reset_world);
     device->SetTransform(D3DTS_VIEW, &reset_view);
     device->SetTransform(D3DTS_PROJECTION, &reset_projection);
-
-    d3d9_state_block->Apply();
-    d3d9_state_block->Release();
 }
 
 const MinimapRenderContext& Minimap::GetRenderContext()
@@ -1940,9 +1923,6 @@ void Minimap::RenderSetupProjection(IDirect3DDevice9* device, const MinimapRende
     const float xscale = context.base_scale / width_f;
     const float yscale = context.base_scale / height_f;
 
-    // anchor_point is where world (0,0) maps to on screen.
-    // After the view transform, the player IS at world (0,0),
-    // so this controls where the player appears on screen.
     const float xtrans = (context.anchor_point.x * 2.0f) / width_f - 1.0f;
     const float ytrans = -(context.anchor_point.y * 2.0f) / height_f + 1.0f;
 

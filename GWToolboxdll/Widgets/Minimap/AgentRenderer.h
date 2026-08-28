@@ -5,6 +5,7 @@
 #include <GWCA/GameContainers/GamePos.h>
 
 #include <D3DContainers.h>
+#include <Widgets/Minimap/CustomRenderer.h>
 
 
 namespace GW {
@@ -43,6 +44,11 @@ public:
 
     void LoadDefaultColors();
     void LoadDefaultSizes();
+
+    Color GetProfessionColor(uint32_t profession) const
+    {
+        return profession < _countof(profession_colors) ? profession_colors[profession] : 0;
+    }
 
     bool show_hidden_npcs = false;
     bool show_quest_npcs_on_minimap = false;
@@ -168,10 +174,19 @@ private:
     Color GetColor(const GW::Agent* agent, const CustomAgent* ca = nullptr) const;
     float GetSize(const GW::Agent* agent, const CustomAgent* ca = nullptr) const;
     Shape_e GetShape(const GW::Agent* agent, const CustomAgent* ca = nullptr) const;
-    // Real players never go through GetCustomAgentsToDraw (see Render()), so the seeded
-    // Neutral/Ally/.../Minion default rows only reach them through this fallback; read the
-    // row's current size instead of the (now write-only) legacy size_* field so editing the
-    // row in the Custom Agents list actually takes effect for players too.
+
+    struct CachedPolygon {
+        const CustomRenderer::CustomPolygon* polygon = nullptr;
+        float min_x = 0.f, min_y = 0.f, max_x = 0.f, max_y = 0.f;
+    };
+    struct CachedMarker {
+        const CustomRenderer::CustomMarker* marker = nullptr;
+        float radius_squared = 0.f;
+    };
+    void RefreshRelevantPolys();
+    std::vector<CachedPolygon> relevant_polygons;
+    std::vector<CachedMarker> relevant_markers;
+
     float GetSeededDefaultSize(GW::Constants::Allegiance allegiance, float fallback) const;
 
     struct RenderPosition {

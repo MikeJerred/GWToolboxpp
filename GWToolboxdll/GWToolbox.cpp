@@ -33,7 +33,6 @@
 #include <Modules/CameraUnlockModule.h>
 #include <Modules/ChatCommands.h>
 #include <Modules/ChatSettings.h>
-#include <Modules/CrashFixesModule.h>
 #include <Modules/CrashHandler.h>
 #include <Modules/DialogModule.h>
 #include <Modules/GameSettings.h>
@@ -236,6 +235,8 @@ namespace {
 
     bool minimap_enabled = false;
 
+    bool can_render_toolbox = false;
+
     bool is_right_clicking = false;
     bool mouse_moved_whilst_right_clicking = false;
     LPARAM right_click_lparam;
@@ -310,9 +311,6 @@ namespace {
         typedef void(__cdecl * GWFnVoid)();
         const auto disable_hooks = (GWFnVoid)GetProcAddress(existing_gwca, "?DisableHooks@GW@@YAXXZ");
         const auto terminate = (GWFnVoid)GetProcAddress(existing_gwca, "?Terminate@GW@@YAXXZ");
-        // The old gwca.dll's hooks may point into a previously-unloaded toolbox dll;
-        // calling DisableHooks/Terminate can therefore crash. Swallow it via SEH
-        // and continue to FreeLibrary.
         if (disable_hooks) {
             Log::Log("[LoadGWCADll] Calling DisableHooks on old gwca.dll");
             __try {
@@ -494,7 +492,7 @@ namespace {
             return CallWindowProc(OldWndProc, hWnd, Message, wParam, lParam);
         }
 
-        if (!(CanRenderToolbox() && GWToolbox::IsInitialized())) {
+        if (!(can_render_toolbox && GWToolbox::IsInitialized())) {
             return CallWindowProc(OldWndProc, hWnd, Message, wParam, lParam);
         }
 
@@ -528,13 +526,6 @@ namespace {
 
         // === Send events to toolbox ===
 
-        /* GW Deliberately makes a WM_MOUSEMOVE event right after right button is pressed.
-            Does this to "hide" the cursor when looking around.
-
-            To easily send a "rmb clicked" event to toolbox modules, figure the logic out ourselves and send a custom message WM_GW_RBUTTONCLICK
-         */
-
-
         switch (Message) {
             case WM_MOUSELEAVE:
             case WM_NCMOUSELEAVE:
@@ -559,11 +550,6 @@ namespace {
                 }
             } break;
 
-            // Other mouse events:
-            // - If right mouse down, leave it to gw
-            // - ImGui first (above), if WantCaptureMouse that's it
-            // - Toolbox module second (e.g.: minimap), if captured, that's it
-            // - otherwise pass to gw
             case WM_RBUTTONDOWN:
             case WM_LBUTTONUP:
             case WM_RBUTTONUP:
@@ -626,10 +612,6 @@ namespace {
                         return true;
                     }
                 }
-                // note: capturing those events would prevent typing if you have a hotkey assigned to normal letters.
-                // We may want to not send events to toolbox if the player is typing in-game
-                // Otherwise, we may want to capture events.
-                // For that, we may want to only capture *successfull* hotkey activations.
                 break;
 
             case WM_SIZE:
@@ -804,13 +786,6 @@ DWORD __stdcall GWToolbox::MainLoop(LPVOID module) noexcept
         while (gwtoolbox_state != GWToolboxState::Terminated) {
             // wait until destruction
             Sleep(100);
-
-            // Feel free to uncomment to get this behavior for testing, but don't commit.
-            // #ifdef _DEBUG
-            //        if (GetAsyncKeyState(VK_END) & 1) {
-            //            GWToolbox::Instance().StartSelfDestruct();
-            //        }
-            // #endif
         }
 
         // @Remark:
@@ -820,9 +795,6 @@ DWORD __stdcall GWToolbox::MainLoop(LPVOID module) noexcept
             Sleep(16);
         }
 
-        // @Remark:
-        // We can't guarantee that the code in Guild Wars thread isn't still in the trampoline, but
-        // practically a short sleep is fine.
         Sleep(16);
 
         Log::Log("Destroying API\n");
@@ -862,9 +834,11 @@ void GWToolbox::Initialize(LPVOID module)
     AttachRenderCallback();
     GW::EnableHooks();
 
-    UpdateInitialising(.0f);
-    AttachGameLoopCallback();
+    // Module init registers GWCA packet/UI callbacks, which push_back into vectors the game thread
+    // is already iterating with a cached begin(). Let the game-loop callback drive Initialising
+    // instead, so every registration is serialised against packet dispatch.
     pending_detach_dll = false;
+    AttachGameLoopCallback();
 }
 
 std::filesystem::path GWToolbox::LoadSettings()
@@ -1138,6 +1112,7 @@ void GWToolbox::Draw(IDirect3DDevice9* device)
         imgui_inifile_changed = false;
     }
     if (gwtoolbox_disabled) {
+        can_render_toolbox = false;
         if (!ShouldDisableToolbox()) {
             Enable();
         }
@@ -1150,7 +1125,8 @@ void GWToolbox::Draw(IDirect3DDevice9* device)
 
     Resources::DxUpdate(device);
 
-    if (!CanRenderToolbox()) return;
+    can_render_toolbox = CanRenderToolbox();
+    if (!can_render_toolbox) return;
 
     // Once-per-frame tick for the shared in-world compositor (installs its hook lazily, resets the
     // per-frame draw guard) so any module that registered an under-UI draw runs this frame.
@@ -1222,9 +1198,6 @@ void GWToolbox::Draw(IDirect3DDevice9* device)
         }
 
 #ifdef _DEBUG
-        // Feel free to uncomment to play with ImGui's features
-        // ImGui::ShowDemoWindow();
-        // ImGui::ShowStyleEditor(); // Warning, this WILL change your theme. Back up theme.ini first!
 #endif
         ToolboxSettings::DrawSettingsCogButtons();
         ImGui::DrawContextMenu();
@@ -1235,9 +1208,6 @@ void GWToolbox::Draw(IDirect3DDevice9* device)
     ImGui::Render();
     ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
 
-    // The Toolbox windows are now drawn into the back buffer; if the user
-    // clicked a title-bar camera button last frame, this is where we
-    // actually read the pixels out and save them to disk.
     ToolboxSettings::FlushPendingScreenshot(device);
 
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
@@ -1284,7 +1254,6 @@ void GWToolbox::UpdateInitialising(float)
 
     Log::Log("Creating Modules\n");
     ToggleModule(CrashHandler::Instance());
-    ToggleModule(CrashFixesModule::Instance());
     ToggleModule(Resources::Instance());
     ToggleModule(ToolboxTheme::Instance());
     ToggleModule(ItemDescriptionHandler::Instance());

@@ -33,13 +33,9 @@
 
 
 namespace {
-    /*IWbemServices* pSvc = 0;
-    IWbemLocator* pLoc = 0;
-    HRESULT CoInitializeEx_result = -1;*/
     Obfuscator::Settings settings;
     char own_player_name[20]{};
     std::wstring own_player_name_w{};
-    MSG msg;
     std::default_random_engine dre = std::default_random_engine(static_cast<uint32_t>(time(nullptr)));
     GW::HookEntry stoc_hook;
     GW::HookEntry ctos_hook;
@@ -521,7 +517,7 @@ namespace {
         guild_roster_obfuscated = obfuscate;
         return true;
     }
-    
+
     void CHAT_CMD_FUNC(CmdObfuscate)
     {
         Obfuscator::Obfuscate(pending_state != ObfuscatorState::Enabled);
@@ -939,10 +935,6 @@ bool Obfuscator::CanTerminate()
 
 void Obfuscator::Update(float)
 {
-    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
     if (pending_guild_obfuscate && GW::Map::GetIsMapLoaded()) {
         ObfuscateGuildRoster(IsObfuscatorEnabled());
         pending_guild_obfuscate = false;

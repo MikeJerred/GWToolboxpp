@@ -12,6 +12,7 @@
 #include <GWCA/Managers/MapMgr.h>
 
 #include <Color.h>
+#include <D3DContainers.h>
 #include <Defines.h>
 #include <ImGuiAddons.h>
 #include <Modules/GwDatModule.h>
@@ -46,6 +47,7 @@ namespace {
     // Not user-configurable.
     constexpr float kRingSpacing = 4.f;    // gwinches, how far the two rings start from the true diameter
     constexpr float kRingDiameter = 90.f;  // the true diameter the two rings pulse toward/away from
+    constexpr float kTrueRingRadius = kRingDiameter * 0.5f;
     constexpr float kFieldRadius = kRingDiameter * 0.5f + kRingSpacing; // footprint half-extent = the largest ring radius
     constexpr float kBeamWidth = 35.f;     // beam width
     constexpr float kBeamOpacity = 1.f;    // beam is unpulsed and always drawn at full opacity
@@ -161,8 +163,10 @@ namespace {
         bool draw = false;
         bool dimmed = false;
         bool draped = false; // heightfield resolved once (items don't move), then sampled every frame
+        bool ring_cached = false;
         uint32_t seen = 0;
         float field[kDrapeGrid + 1][kDrapeGrid + 1] = {}; // terrain z sampled across pos +/- kFieldRadius
+        std::vector<RingVertex> ring_outer, ring_inner;
     };
 
     std::unordered_map<uint32_t, Beacon> beacons;
@@ -261,6 +265,25 @@ namespace {
         }
     }
 
+    void BuildRingCache(Beacon& beacon)
+    {
+        constexpr DWORD placeholder_col = 0xFFFFFFFF;
+        EmitDrapedRing(beacon.ring_outer, beacon, kTrueRingRadius, placeholder_col);
+        EmitDrapedRing(beacon.ring_inner, beacon, kTrueRingRadius, placeholder_col);
+        beacon.ring_cached = true;
+    }
+
+    void EmitCachedRing(std::vector<RingVertex>& out, const std::vector<RingVertex>& cache, const Beacon& beacon, const float radius, const DWORD col)
+    {
+        const float factor = radius / kTrueRingRadius;
+        for (const RingVertex& v : cache) {
+            out.push_back({beacon.pos.x + (v.x - beacon.pos.x) * factor,
+                           beacon.pos.y + (v.y - beacon.pos.y) * factor,
+                           beacon.z + (v.z - beacon.z) * factor,
+                           col, v.u, v.v});
+        }
+    }
+
     void Classify(const GW::AgentItem& agent_item, const GW::Item& item, const uint32_t my_agent_id, Beacon& beacon)
     {
         const bool mine = !agent_item.owner || agent_item.owner == my_agent_id;
@@ -337,11 +360,6 @@ namespace {
 
     constexpr float kBeamSolidFraction = 0.25f; // bottom fraction of the beam height that stays fully solid before fading
 
-    // Appends a single quad standing on the ground and facing the camera - `right_x`/`right_y` is the
-    // horizontal axis (from GetCameraRight below) so the quad rotates to face the viewer without ever
-    // being edge-on, unlike two fixed crossed quads. Subdivided into a 3x3 vertex grid (4 quads) so the
-    // beam holds solid near the item before fading upward, and tapers to transparent at its left/right
-    // edges too, instead of a single hard-edged rectangle with a flat top-to-bottom gradient.
     void EmitBeamQuad(std::vector<BeaconVertex>& out, const GW::Vec2f& pos, const float ground_z, const float right_x, const float right_y, const Color base_color, const float base_alpha)
     {
         const float half = kBeamWidth * 0.5f;
@@ -438,61 +456,61 @@ void LootBeaconsModule::DrawInWorld(IDirect3DDevice9* device)
     float right_x, right_y;
     GetCameraRight(right_x, right_y);
 
+    const auto* cam = GW::CameraMgr::GetCamera();
+    const float focus_x = cam ? cam->look_at_target.x : 0.f;
+    const float focus_y = cam ? cam->look_at_target.y : 0.f;
+
     scratch.clear();
     ring_scratch.clear();
     int builds = 0;
     for (auto& [id, beacon] : beacons) {
         if (!beacon.draw) continue;
+        const float focus_dx = beacon.pos.x - focus_x;
+        const float focus_dy = beacon.pos.y - focus_y;
+        if (cam && focus_dx * focus_dx + focus_dy * focus_dy > GW::Constants::SqrRange::Compass) continue;
         if (!beacon.draped) {
             if (!n_planes || builds >= kMaxBuildsPerFrame) continue;
             ++builds;
             BuildDrape(beacon, n_planes);
         }
+        if (!beacon.ring_cached) BuildRingCache(beacon);
         EmitBeamQuad(scratch, beacon.pos, beacon.z, right_x, right_y, beacon.color, beacon.dimmed ? kBeamOpacity * 0.4f : kBeamOpacity);
 
         // Ring opacity comes straight from the beacon colour's own alpha channel; dimmed (reserved for
         // other party members) is the one exception, same as the beam.
         const DWORD ring_col = beacon.dimmed ? WithAlpha(beacon.color, 0.4f) : beacon.color;
-        EmitDrapedRing(ring_scratch, beacon, r_outer, ring_col);
-        EmitDrapedRing(ring_scratch, beacon, r_inner, ring_col);
+        EmitCachedRing(ring_scratch, beacon.ring_outer, beacon, r_outer, ring_col);
+        EmitCachedRing(ring_scratch, beacon.ring_inner, beacon, r_inner, ring_col);
     }
 
     if (!scratch.empty()) {
-        IDirect3DStateBlock9* state_block = nullptr;
-        if (device->CreateStateBlock(D3DSBT_ALL, &state_block) == D3D_OK) {
-            // Static depth keeps walls/props occluding overlays; agents draw later in GW's pass.
-            if (GameWorldCompositor::SetupPipeline(device, true, kNoDistanceLimit, 0.f)) {
-                constexpr BOOL dotted_off[1] = {FALSE};
-                device->SetPixelShaderConstantB(0, dotted_off, 1);
-                device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, static_cast<UINT>(scratch.size() / 3), scratch.data(), sizeof(BeaconVertex));
-            }
-            state_block->Apply();
-            state_block->Release();
+        const D3DStateGuard state_guard(device);
+        // Static depth keeps walls/props occluding overlays; agents draw later in GW's pass.
+        if (GameWorldCompositor::SetupPipeline(device, true, kNoDistanceLimit, 0.f)) {
+            constexpr BOOL dotted_off[1] = {FALSE};
+            device->SetPixelShaderConstantB(0, dotted_off, 1);
+            device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, static_cast<UINT>(scratch.size() / 3), scratch.data(), sizeof(BeaconVertex));
         }
     }
 
     IDirect3DTexture9* ring_tex = ring_tex_pp ? *ring_tex_pp : nullptr;
     if (!ring_scratch.empty() && ring_tex && EnsureRingShaders(device)) {
-        IDirect3DStateBlock9* state_block = nullptr;
-        if (device->CreateStateBlock(D3DSBT_ALL, &state_block) == D3D_OK) {
-            if (device->SetVertexShader(ring_vs) == D3D_OK && device->SetPixelShader(ring_ps) == D3D_OK && device->SetVertexDeclaration(ring_decl) == D3D_OK &&
-                GameWorldCompositor::SetWorldViewProj(device)) {
-                // Static depth keeps walls/props occluding overlays; agents draw later in GW's pass.
-                GameWorldCompositor::SetWorldRenderStates(device, true);
-                constexpr float slope_bias = -1.5f;
-                constexpr float const_bias = -1e-5f;
-                device->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, *reinterpret_cast<const DWORD*>(&slope_bias));
-                device->SetRenderState(D3DRS_DEPTHBIAS, *reinterpret_cast<const DWORD*>(&const_bias));
-                GameWorldCompositor::SetDistanceFog(device, kNoDistanceLimit, 0.f);
-                device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-                device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-                device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-                device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-                device->SetTexture(0, ring_tex);
-                device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, static_cast<UINT>(ring_scratch.size() / 3), ring_scratch.data(), sizeof(RingVertex));
-            }
-            state_block->Apply();
-            state_block->Release();
+        const D3DStateGuard state_guard(device);
+        if (device->SetVertexShader(ring_vs) == D3D_OK && device->SetPixelShader(ring_ps) == D3D_OK && device->SetVertexDeclaration(ring_decl) == D3D_OK &&
+            GameWorldCompositor::SetWorldViewProj(device)) {
+            // Static depth keeps walls/props occluding overlays; agents draw later in GW's pass.
+            GameWorldCompositor::SetWorldRenderStates(device, true);
+            constexpr float slope_bias = -1.5f;
+            constexpr float const_bias = -1e-5f;
+            device->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, *reinterpret_cast<const DWORD*>(&slope_bias));
+            device->SetRenderState(D3DRS_DEPTHBIAS, *reinterpret_cast<const DWORD*>(&const_bias));
+            GameWorldCompositor::SetDistanceFog(device, kNoDistanceLimit, 0.f);
+            device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+            device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+            device->SetTexture(0, ring_tex);
+            device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, static_cast<UINT>(ring_scratch.size() / 3), ring_scratch.data(), sizeof(RingVertex));
         }
     }
 }

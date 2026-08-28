@@ -34,32 +34,45 @@ namespace Pathing {
     // pathing trapezoids. Game thread only. Returns the trapezoid, or nullptr if no map.
     GW::PathingTrapezoid* FindClosestPositionOnTrapezoid(GW::GamePos& point);
 
-    // True if `point` is inside a walkable trapezoid on the current map. Cheap (a BSP descent),
-    // unlike the snap above, which falls back to scanning every trapezoid when the point is
-    // outside the walkable area. Game thread only.
     bool IsPositionWalkable(const GW::GamePos& point);
 
-    // BFS from the player's trapezoid through adjacency and unblocked portals. Blocking matches
-    // the game's native A* (IPath_ExpandPortalLeft/Right): portal.flags & 0x04, and
-    // blockedPlanes[neighbor_plane] & 1. Empty when the player's position is unknown, which
-    // callers should read as "assume everything is reachable" rather than "nothing is".
-    // Game thread only.
     std::unordered_set<const GW::PathingTrapezoid*> FindReachableTrapezoids();
 
-    // True if `point` is walkable AND the player can actually get there. Terrain behind a closed
-    // gate or across a gap is walkable but not reachable, and the difference matters to anything
-    // that suggests somewhere to go. Result is cached until the map or the gate state changes.
-    // Game thread only.
+    struct TrapezoidRef {
+        const GW::PathingTrapezoid* trapezoid;
+        uint32_t plane;
+        bool reachable;
+    };
+
+    bool IsReachabilityKnown();
+
+    std::vector<TrapezoidRef> GetTrapezoidsWithReachability();
+
+    // True if `p` lies within this trapezoid, in 2D. Game thread only.
+    bool IsOnTrapezoid(const GW::PathingTrapezoid* t, const GW::Vec2f& p);
+
+    bool TrapezoidOverlapsBox(const GW::PathingTrapezoid* t, const GW::Vec2f& box_min, const GW::Vec2f& box_max, GW::Vec2f& out_point);
+
     bool IsPositionReachable(const GW::GamePos& point);
 
-    // True if walking straight from `a` to `b` would pass through a travel portal's doorway.
-    // Stepping into one changes map, so the far side is not somewhere this map's pathing can
-    // actually deliver you. Game thread only.
     bool CrossesTravelPortal(const GW::Vec2f& a, const GW::Vec2f& b);
 
-    // Current blocked-plane state. Comparing the contents beats watching for a change event: it
-    // is exact, and it survives callers that were not listening at the moment a gate moved.
-    // False if there is no pathing context. Game thread only.
+    // A travel portal blocks as a disc of the prop's width: a walk that only clips the opening, or
+    // creeps over it in steps too short to straddle a line, is still going through the gate.
+    struct TravelDoorway {
+        GW::Vec2f pos{};
+        float radius_sq = 0.f;
+    };
+    // Both the live reachability walk and the baked largest-component walk must apply the same rule,
+    // or the overlay contradicts the table it is drawn from.
+    GW::Vec2f TrapezoidCentre(const GW::PathingTrapezoid* t);
+    std::vector<TravelDoorway> MakeTravelDoorways(const std::vector<PortalProp>& props);
+    std::vector<TravelDoorway> GetTravelDoorways();
+    // When set, the reachability walk steps straight through travel portals, matching the baked
+    // _glitched masks. Both sides have to be told the same thing or the overlay contradicts them.
+    void SetGateGlitchAllowed(bool allowed);
+    bool CrossesTravelDoorway(const std::vector<TravelDoorway>& doorways, const GW::Vec2f& a, const GW::Vec2f& b);
+
     bool CopyBlockedPlanes(std::vector<uint32_t>& out);
 
     class MilePath {
@@ -68,9 +81,6 @@ namespace Pathing {
         volatile bool m_build_failed = false; // worker thread caught std::bad_alloc during visgraph build
         volatile int m_progress = 0;
 
-        // Lazy full-build state. A lightweight MilePath (full_build=false) keeps only
-        // raw map data; EnsureFullBuild() builds the visgraph on first walk.
-        // m_constructed_full marks maps built eagerly on the worker (live current map).
         volatile bool m_full_built = false;
         bool m_constructed_full = false;
         std::mutex m_build_mutex;
@@ -110,9 +120,6 @@ namespace Pathing {
             return m_progress;
         }
 
-        // Read-only access to the underlying pathing map data (owned by MilePath).
-        // Lets callers reuse the loaded DAT data without re-reading it. Pointer
-        // remains valid for the MilePath's lifetime.
         const Pathing::PathingMapData* GetMapData() const;
 
         NavMesh* GetNavMeshForDebug();

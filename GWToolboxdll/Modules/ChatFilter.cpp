@@ -39,9 +39,6 @@ namespace {
 
     constexpr size_t FILTER_BUF_SIZE = 1024 * 16;
 
-    // @Remark:
-    // The text buffer will only be parsed if there was no modification within this period of time.
-    // It can be re-ajusted to be more enjoyable.
     constexpr uint32_t NOISE_REDUCTION_DELAY_MS = 1000;
 
     using Pattern = TextUtils::SearchPattern<wchar_t>;
@@ -60,13 +57,6 @@ namespace {
     uint32_t timer_parse_filters = 0;
     uint32_t timer_parse_regexes = 0;
     uint32_t timer_parse_authors = 0;
-
-    //void ByContent_ParseBuf() {
-    //      ParseBuffer(bycontent_buf, bycontent_regex);
-    //  } else {
-    //      ParseBuffer(bycontent_buf, bycontent_words);
-    //  }
-    //}
 
     GW::HookEntry BlockIfApplicable_Entry;
 
@@ -223,15 +213,14 @@ namespace {
         return player_name && wcsncmp(player_name, _player_name, wcslen(player_name)) == 0;
     }
 
-    // Matches a sender against the user-defined "Hide messages from" block list.
-    bool IsAuthorBlocked(const std::wstring& sender)
+    bool IsAuthorBlocked(const std::wstring& sanitised_sender)
     {
         using namespace TextUtils;
         if (!settings.messagebyauthor || byauthor_words.empty()) {
             return false;
         }
         // Normalise the same way ParseBuffer normalises the stored names.
-        const auto normalised = RemoveDiacritics(SanitizePlayerName(sender));
+        const auto normalised = RemoveDiacritics(sanitised_sender);
         for (const auto& blocked : byauthor_words) {
             if (blocked.Matches(normalised)) {
                 return true;
@@ -242,8 +231,12 @@ namespace {
 
     bool ShouldIgnoreBySender(const std::wstring& sender)
     {
+        const bool author_filtering = settings.messagebyauthor && !byauthor_words.empty();
+        if (!author_filtering && GW::FriendListMgr::GetNumberOfIgnores() == 0) {
+            return false;
+        }
         const auto sanitised = TextUtils::SanitizePlayerName(sender);
-        return IsAuthorBlocked(sender) || FriendListWindow::GetIsPlayerIgnored(sanitised) || GW::FriendListMgr::GetFriend(nullptr, sanitised.c_str(), GW::FriendType::Ignore) != nullptr;
+        return IsAuthorBlocked(sanitised) || FriendListWindow::GetIsPlayerIgnored(sanitised) || GW::FriendListMgr::GetFriend(nullptr, sanitised.c_str(), GW::FriendType::Ignore) != nullptr;
     }
 
     // Should this message be ignored by encoded string?
@@ -330,10 +323,6 @@ namespace {
             case 0x7DF:
                 return settings.ally_pickup_common; // party shares gold ?
             case 0x7F0: {
-                // monster/player x drops item y (no assignment)
-                // monster x drops item y, your party assigns to player z
-                // 07f0 fab6 c4e6 1b50 010a <monster> 0001 010b <rarity> 010a <item> 0001 0001
-                // first segment describes the agent who dropped, second segment describes the item dropped
                 const auto item_argument = GetSecondSegment(message);
                 if (IsAshes(GetFirstSegment(item_argument))) {
                     return settings.ashes_dropped;
@@ -347,10 +336,6 @@ namespace {
                 return settings.self_drop_common;
             }
             case 0x7F1: {
-                // monster x drops item y, your party assigns to player z
-                // 0x7F1 0x9A9D 0xE943 0xB33 0x10A <monster> 0x1 0x10B <rarity> 0x10A <item> 0x1 0x1 0x10F <assignee: playernumber + 0x100>
-                // <monster> is wchar_t id of several wchars
-                // <rarity> is 0x108 for common, 0xA40 gold, 0xA42 purple, 0xA43 green
                 const auto player_number = GetNumericSegment(message, 0x10f);
                 bool for_player = false;
                 if (player_number) {
@@ -553,10 +538,6 @@ namespace {
                 return settings.salvage_messages; // You salvaged <number> <item name(s)> from the <item name>
             case 0xADD:
                 return settings.item_cannot_be_used; // That item has no uses remaining
-            //default:
-            //  for (size_t i = 0; pak->message[i] != 0; i++) printf(" 0x%X", pak->message[i]);
-            //  printf("\n");
-            //  return false;
         }
 
         return false;
@@ -773,7 +754,7 @@ void ChatFilter::BlockMessageForMs(const wchar_t* message_contains, clock_t ms) 
 }
 
 bool ChatFilter::IsSenderBlocked(const std::wstring& sender) {
-    return IsAuthorBlocked(sender);
+    return IsAuthorBlocked(TextUtils::SanitizePlayerName(sender));
 }
 
 void ChatFilter::LoadSettings(SettingsDoc& doc, ToolboxIni* legacy)

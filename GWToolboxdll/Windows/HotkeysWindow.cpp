@@ -137,8 +137,8 @@ namespace {
     bool IsFrameCreated(GW::UI::Frame* frame) {
         return frame && frame->IsCreated();
     }
-    
-    
+
+
     bool IsPlayerEquipmentReady()
     {
         const auto player = GW::Agents::GetControlledCharacter();
@@ -149,8 +149,8 @@ namespace {
     }
     bool IsMapReady()
     {
-        return GW::Map::GetIsMapLoaded() 
-            && GW::Map::GetInstanceType() != GW::Constants::InstanceType::Loading 
+        return GW::Map::GetIsMapLoaded()
+            && GW::Map::GetInstanceType() != GW::Constants::InstanceType::Loading
             && !GW::Map::GetIsObserving() && IsPlayerEquipmentReady()
             && IsFrameCreated(GW::UI::GetFrameByLabel(L"Skillbar"));
     }
@@ -466,9 +466,6 @@ if (ImGui::Selectable("Equip Item")) {
             hotkeys_changed = new_hotkey != 0;
         }
 
-        // === each hotkey / group ===
-        // Groups are first-class items in `hotkeys`; HotkeyGroup::Draw handles its children.
-        // All moves at the top level are simple swaps — no rotation needed.
         for (auto hotkey : TBHotkey::top_level_hotkeys) {
             if (hotkey->Draw()) break; // re-render next frame after list mutation
         }
@@ -538,9 +535,6 @@ void HotkeysWindow::SaveSettings(SettingsDoc& doc)
     ToolboxWindow::SaveSettings(doc);
     doc.SetStruct(Name(), settings);
 
-    // Save all hotkeys as flat tagged entries. Every entry gets a sort_order field
-    // that determines display order on load. Children also get a group field
-    // containing their parent group's label.
     std::vector<HotkeyEntry> entries;
     entries.reserve(TBHotkey::all_hotkeys.size());
     ToolboxIni tmp_ini;
@@ -587,7 +581,8 @@ bool HotkeysWindow::WndProc(const UINT Message, const WPARAM wParam, LPARAM)
     size_t hotkeys_triggered = 0;
 
     auto check_triggers = [check_trigger, &hotkeys_triggered](bool is_key_up, uint32_t keyData) {
-        std::vector<TBHotkey*> matching_hotkeys;
+        static std::vector<TBHotkey*> matching_hotkeys;
+        matching_hotkeys.clear();
         size_t max_modifier_count = 0;
 
         bool is_in_controller_mode = GW::UI::IsInControllerMode();
@@ -666,7 +661,11 @@ void HotkeysWindow::Update(const float)
         return;
     }
     if (!map_change_triggered) {
-        map_change_triggered = OnMapChanged();
+        static clock_t last_map_check = 0;
+        if (!last_map_check || TIMER_DIFF(last_map_check) > 500) {
+            last_map_check = TIMER_INIT();
+            map_change_triggered = OnMapChanged();
+        }
     }
     for (auto hotkey : TBHotkey::all_hotkeys) {
         if (hotkey->ongoing) hotkey->Execute();

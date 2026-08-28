@@ -195,6 +195,11 @@ namespace {
     float GetSystemVolume(bool cache = true)
     {
         if (cache && TIMER_DIFF(last_cached_system_volume) < 10000) return cached_system_volume;
+        if (cache) {
+            last_cached_system_volume = TIMER_INIT();
+            Resources::EnqueueWorkerTask([] { GetSystemVolume(false); });
+            return cached_system_volume;
+        }
 
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         bool needs_uninit = SUCCEEDED(hr);
@@ -584,10 +589,6 @@ Gender GetGenderByFileId(const uint32_t file_id)
             if (!duration) duration = EstimateAudioDuration(path);
         }
 
-        // --- Phase 2: call into the audio system WITHOUT holding the lock ---
-        // shared_ptr keeps `this` alive even if another thread calls ClearSounds()
-        // or CancelDialogSpeech() here — they will Stop() and drop their shared_ptr
-        // but our refcount won't hit zero until this scope exits.
         const auto pos = GetAgentVec3f(agent_id);
         VoiceLog("Playing audio file: %s (estimated duration: %dms)", path.filename().string().c_str(), duration);
         const uint32_t flags = is_dialog_window ? SoundFlags_Dialog : (SoundFlags_Dialog | SoundFlags_Positional);
@@ -821,8 +822,7 @@ Gender GetGenderByFileId(const uint32_t file_id)
         return GW::GetDistance(agent->pos, GetPlayerPosition());
     }
 
-    GW::UI::UIInteractionCallback OnNPCInteract_UICallback_Func = nullptr, OnNPCInteract_UICallback_Ret = nullptr;
-    GW::UI::UIInteractionCallback OnVendorInteract_UICallback_Func = nullptr, OnVendorInteract_UICallback_Ret = nullptr;
+    GW::HookEntry FrameUIMessage_HookEntry;
 
     bool was_dialog_already_open = false;
 
@@ -843,51 +843,12 @@ Gender GetGenderByFileId(const uint32_t file_id)
         }
     }
 
-    void OnNPCInteract_UICallback(GW::UI::InteractionMessage* message, void* wParam, void* lParam)
+    // Not a hook on the frame's callback: DialogModule and GWCA hook that same function, and
+    // GWCA fatally asserts when its own CreateHook then collides on the already-hooked target.
+    void OnDialogFrameDestroyed(GW::HookStatus*, const GW::UI::Frame* frame, GW::UI::UIMessage, void*, void*)
     {
-        GW::Hook::EnterHook();
-        OnNPCInteract_UICallback_Ret(message, wParam, lParam);
-        if (message->message_id == GW::UI::UIMessage::kDestroyFrame) OnNPCDialogClosed();
-        GW::Hook::LeaveHook();
-    }
-
-    void OnVendorInteract_UICallback(GW::UI::InteractionMessage* message, void* wParam, void* lParam)
-    {
-        GW::Hook::EnterHook();
-        OnVendorInteract_UICallback_Ret(message, wParam, lParam);
-        if (message->message_id == GW::UI::UIMessage::kDestroyFrame) OnNPCDialogClosed();
-        GW::Hook::LeaveHook();
-    }
-
-    void HookNPCInteractFrame()
-    {
-        if (!OnNPCInteract_UICallback_Func) {
-            const auto frame = GW::UI::GetFrameByLabel(L"NPCInteract");
-            if (frame && frame->frame_callbacks.size()) {
-                OnNPCInteract_UICallback_Func = frame->frame_callbacks[0].callback;
-                GW::Hook::CreateHook((void**)&OnNPCInteract_UICallback_Func, OnNPCInteract_UICallback, (void**)&OnNPCInteract_UICallback_Ret);
-                GW::Hook::EnableHooks(OnNPCInteract_UICallback_Func);
-            }
-        }
-        if (!OnVendorInteract_UICallback_Func) {
-            const auto vendor_frame = GW::UI::GetFrameByLabel(L"Vendor");
-            if (vendor_frame && vendor_frame->frame_callbacks.size()) {
-                OnVendorInteract_UICallback_Func = vendor_frame->frame_callbacks[0].callback;
-                GW::Hook::CreateHook((void**)&OnVendorInteract_UICallback_Func, OnVendorInteract_UICallback, (void**)&OnVendorInteract_UICallback_Ret);
-                GW::Hook::EnableHooks(OnVendorInteract_UICallback_Func);
-            }
-        }
-    }
-
-    void UnHookNPCInteractFrame()
-    {
-        if (OnNPCInteract_UICallback_Func) {
-            GW::Hook::RemoveHook(OnNPCInteract_UICallback_Func);
-            OnNPCInteract_UICallback_Func = nullptr;
-        }
-        if (OnVendorInteract_UICallback_Func) {
-            GW::Hook::RemoveHook(OnVendorInteract_UICallback_Func);
-            OnVendorInteract_UICallback_Func = nullptr;
+        if (frame == GW::UI::GetFrameByLabel(L"NPCInteract") || frame == GW::UI::GetFrameByLabel(L"Vendor")) {
+            OnNPCDialogClosed();
         }
     }
 
@@ -912,7 +873,6 @@ Gender GetGenderByFileId(const uint32_t file_id)
         if (status->blocked) return;
         switch (msgid) {
             case GW::UI::UIMessage::kDialogBody: {
-                HookNPCInteractFrame();
                 was_dialog_already_open = false;
             } break;
             case GW::UI::UIMessage::kPreferenceValueChanged: {
@@ -939,7 +899,6 @@ Gender GetGenderByFileId(const uint32_t file_id)
                 ClearSounds();
             } break;
             case GW::UI::UIMessage::kVendorWindow: {
-                HookNPCInteractFrame();
                 const auto packet = (GW::UI::UIPacket::kVendorWindow*)wParam;
                 last_dialog_agent_id = packet->unk;
                 switch (packet->transaction_type) {
@@ -1271,9 +1230,6 @@ Gender GetGenderByFileId(const uint32_t file_id)
             return bail();
         }
 
-        // --- Hand off to worker thread ---
-        // Capture a weak_ptr; if audio is cancelled while we're waiting for the
-        // network call, lock() will return nullptr and we bail safely.
         std::weak_ptr<PendingNPCAudio> weak_audio = audio;
         // Release our strong ref now — pending_audio still holds one.
         audio.reset();
@@ -1719,6 +1675,7 @@ void TextToSpeechModule::Initialize()
         RegisterUIMessageCallback(&UIMessage_HookEntry, message_id, OnPostUIMessage, 0x4000);
     }
     AudioSettings::RegisterPlaySoundCallback(&UIMessage_HookEntry, OnPlaySound);
+    GW::UI::RegisterFrameUIMessageCallback(&FrameUIMessage_HookEntry, GW::UI::UIMessage::kDestroyFrame, OnDialogFrameDestroyed);
 
     OnAgentSpeechBubble_UICallback_Func = (GW::UI::UIInteractionCallback)GW::Scanner::ToFunctionStart(GW::Scanner::FindAssertion("AtMonolog.cpp", "msg.createParam", 0, 0), 0xfff);
     if (OnAgentSpeechBubble_UICallback_Func) {
@@ -1732,7 +1689,7 @@ void TextToSpeechModule::Terminate()
 {
     ToolboxModule::Terminate();
     ClearSounds();
-    UnHookNPCInteractFrame();
+    GW::UI::RemoveFrameUIMessageCallback(&FrameUIMessage_HookEntry);
     GW::UI::RemoveUIMessageCallback(&UIMessage_HookEntry);
     GW::UI::RemoveUIMessageCallback(&PreUIMessage_HookEntry);
     AudioSettings::RemovePlaySoundCallback(&UIMessage_HookEntry);
