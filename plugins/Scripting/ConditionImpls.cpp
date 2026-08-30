@@ -660,7 +660,11 @@ bool PlayerHasSkillCondition::check() const
 
     return std::ranges::any_of(bar->skills, [&](const auto& skill) {
         if (skill.skill_id != id) return false;
-        if (skill.skill_id == GW::Constants::SkillID::No_Skill || (uint32_t)skill.skill_id >= (uint32_t)GW::Constants::SkillID::Count) return false;
+        if (skill.skill_id == GW::Constants::SkillID::No_Skill ||
+            (uint32_t)skill.skill_id > (uint32_t)GW::Constants::SkillID::Dhuums_Covenant_Broken
+        ) {
+            return false;
+        }
         switch (requirement) {
             case HasSkillRequirement::OnBar:
                 return true;
@@ -788,8 +792,11 @@ bool PlayerHasSkillBySlotCondition::check() const
     if (!player || !bar || !bar->IsValid() || slot < 1 || slot > 7) return false;
 
     const auto skill = bar->skills[slot - 1];
-    if (skill.skill_id == GW::Constants::SkillID::No_Skill || (uint32_t)skill.skill_id >= (uint32_t)GW::Constants::SkillID::Count)
+    if (skill.skill_id == GW::Constants::SkillID::No_Skill ||
+        (uint32_t)skill.skill_id > (uint32_t)GW::Constants::SkillID::Dhuums_Covenant_Broken)
+    {
         return false;
+    }
 
     switch (requirement)
     {

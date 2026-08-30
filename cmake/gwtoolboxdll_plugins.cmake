@@ -109,6 +109,11 @@ macro(add_tb_plugin PLUGIN)
     set_target_properties(${PLUGIN} PROPERTIES FOLDER "plugins/")
 endmacro()
 
+option(GWTOOLBOX_BUILD_EXAMPLE_PLUGIN "Build the ExamplePlugin sample (plugin-author reference; skipped in CI to save build time and keep it out of release artifacts)" ON)
+if(GWTOOLBOX_BUILD_EXAMPLE_PLUGIN)
+    add_tb_plugin(ExamplePlugin)
+endif()
+
 add_tb_plugin(AgentPopTimer)
 target_link_libraries(AgentPopTimer PRIVATE directxtexloader)
 
@@ -117,7 +122,6 @@ target_link_libraries(DeathPenaltyTimer PRIVATE directxtexloader)
 
 add_tb_plugin(ChestOpener)
 add_tb_plugin(DhuumCalculator)
-add_tb_plugin(ExamplePlugin)
 add_tb_plugin(Follow)
 add_tb_plugin(GWSplits)
 add_tb_plugin(PitsSoulsWindow)
